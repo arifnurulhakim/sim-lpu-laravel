@@ -8,6 +8,9 @@ use App\Models\UserGrup;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 use Symfony\Component\HttpFoundation\Response;
+use Tymon\JWTAuth\Claims\Collection;
+use Tymon\JWTAuth\Facades\JWTAuth;
+use Tymon\JWTAuth\Payload;
 
 class UserController extends Controller
 {
@@ -249,5 +252,17 @@ class UserController extends Controller
         } catch (\Exception $e) {
             return response()->json(['status' => 'ERROR', 'message' => $e->getMessage()], Response::HTTP_INTERNAL_SERVER_ERROR);
         }
+    }
+    public function generateapikey()
+    {
+        // Membuat payload JWT dengan menggunakan Collection
+        $claims = new Collection(['api_key' => true]);  $access_token = Session::get('accessToken');
+        $payload = new Payload($claims, $expiration);
+
+        // Menghasilkan token JWT dengan payload yang diberikan
+        $token = JWTAuth::encode($payload);
+
+        // Mengembalikan token sebagai API key
+        return response()->json(['api_key' => $token]);
     }
 }

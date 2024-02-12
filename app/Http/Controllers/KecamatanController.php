@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Kecamatan;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -141,4 +142,68 @@ class KecamatanController extends Controller
             return response()->json(['status' => 'ERROR', 'message' => $e->getMessage()], Response::HTTP_INTERNAL_SERVER_ERROR);
         }
     }
+    public function syncKecamatan()
+    {
+        try {
+            // Memulai transaksi database untuk meningkatkan kinerja
+            DB::beginTransaction();
+
+            // Mendefinisikan endpoint untuk sinkronisasi kecamatan
+            $endpoint = 'kecamatan';
+
+            // Membuat instance dari ApiController
+            $apiController = new ApiController();
+
+            // Membuat instance dari Request dan mengisi access token jika diperlukan
+            $request = new Request();
+            $request->merge(['end_point' => $endpoint]);
+
+            // Memanggil makeRequest dari ApiController untuk sinkronisasi dengan endpoint kecamatan
+            $response = $apiController->makeRequest($request);
+
+            // Mengambil data kecamatan dari respons
+            $dataKecamatan = $response['data'];
+
+            // Memproses setiap data kecamatan dari respons
+            foreach ($dataKecamatan as $data) {
+                // Mencari kecamatan berdasarkan ID
+                $kecamatan = Kecamatan::find($data['kode_kecamatan']);
+
+                // Jika kecamatan ditemukan, perbarui data
+                if ($kecamatan) {
+                    $kecamatan->update([
+                        'nama' => $data['nama_kecamatan'],
+                        'id_kabupaten_kota' => $data['kode_kota_kab'],
+                        'id_provinsi' => $data['kode_provinsi'],
+                        // Perbarui atribut lain yang diperlukan
+                    ]);
+                } else {
+                    // Jika kecamatan tidak ditemukan, tambahkan data baru
+                    Kecamatan::create([
+                        'id' => $data['kode_kecamatan'],
+                        'nama' => $data['nama_kecamatan'],
+                        'id_kabupaten_kota' => $data['kode_kota_kab'],
+                        'id_provinsi' => $data['kode_provinsi'],
+                        // Tambahkan atribut lain yang diperlukan
+                    ]);
+                }
+            }
+
+            // Commit transaksi setelah selesai
+            DB::commit();
+
+            // Setelah sinkronisasi selesai, kembalikan respons JSON sukses
+            return response()->json([
+                'status' => 'SUCCESS',
+                'message' => 'Sinkronisasi kecamatan berhasil',
+            ], 200);
+        } catch (\Exception $e) {
+            // Rollback transaksi jika terjadi kesalahan
+            DB::rollBack();
+
+            // Tangani kesalahan yang terjadi selama sinkronisasi
+            return response()->json(['message' => 'Terjadi kesalahan: ' . $e->getMessage()], 500);
+        }
+    }
+
 }

@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Kelurahan;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -147,4 +148,71 @@ class KelurahanController extends Controller
             return response()->json(['status' => 'ERROR', 'message' => $e->getMessage()], Response::HTTP_INTERNAL_SERVER_ERROR);
         }
     }
+
+    public function syncKelurahan()
+    {
+        try {
+            // Memulai transaksi database untuk meningkatkan kinerja
+            DB::beginTransaction();
+
+            // Mendefinisikan endpoint untuk sinkronisasi kelurahan
+            $endpoint = 'kelurahan';
+
+            // Membuat instance dari ApiController
+            $apiController = new ApiController();
+
+            // Membuat instance dari Request dan mengisi access token jika diperlukan
+            $request = new Request();
+            $request->merge(['end_point' => $endpoint]);
+
+            // Memanggil makeRequest dari ApiController untuk sinkronisasi dengan endpoint kelurahan
+            $response = $apiController->makeRequest($request);
+
+            // Mengambil data kelurahan dari respons
+            $dataKelurahan = $response['data'];
+
+            // Memproses setiap data kelurahan dari respons
+            foreach ($dataKelurahan as $data) {
+                // Mencari kelurahan berdasarkan ID
+                $kelurahan = Kelurahan::find($data['kode_kelurahan']);
+
+                // Jika kelurahan ditemukan, perbarui data
+                if ($kelurahan) {
+                    $kelurahan->update([
+                        'nama' => $data['nama_kelurahan'],
+                        'id_kecamatan' => $data['kode_kecamatan'],
+                        'id_kabupaten_kota' => $data['kode_kota_kab'],
+                        'id_provinsi' => $data['kode_provinsi'],
+                        // Perbarui atribut lain yang diperlukan
+                    ]);
+                } else {
+                    // Jika kelurahan tidak ditemukan, tambahkan data baru
+                    Kelurahan::create([
+                        'id' => $data['kode_kelurahan'],
+                        'nama' => $data['nama_kelurahan'],
+                        'id_kecamatan' => $data['kode_kecamatan'],
+                        'id_kabupaten_kota' => $data['kode_kota_kab'],
+                        'id_provinsi' => $data['kode_provinsi'],
+                        // Tambahkan atribut lain yang diperlukan
+                    ]);
+                }
+            }
+
+            // Commit transaksi setelah selesai
+            DB::commit();
+
+            // Setelah sinkronisasi selesai, kembalikan respons JSON sukses
+            return response()->json([
+                'status' => 'SUCCESS',
+                'message' => 'Sinkronisasi kelurahan berhasil',
+            ], 200);
+        } catch (\Exception $e) {
+            // Rollback transaksi jika terjadi kesalahan
+            DB::rollBack();
+
+            // Tangani kesalahan yang terjadi selama sinkronisasi
+            return response()->json(['message' => 'Terjadi kesalahan: ' . $e->getMessage()], 500);
+        }
+    }
+
 }

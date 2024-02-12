@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\KabupatenKota;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -145,4 +146,66 @@ class KabupatenKotaController extends Controller
             return response()->json(['status' => 'ERROR', 'message' => $e->getMessage()], Response::HTTP_INTERNAL_SERVER_ERROR);
         }
     }
+    public function syncKabupaten()
+    {
+        try {
+            // Memulai transaksi database untuk meningkatkan kinerja
+            DB::beginTransaction();
+
+            // Mendefinisikan endpoint untuk sinkronisasi kabupaten/kota
+            $endpoint = 'kota_kab';
+
+            // Membuat instance dari ApiController
+            $apiController = new ApiController();
+
+            // Membuat instance dari Request dan mengisi access token jika diperlukan
+            $request = new Request();
+            $request->merge(['end_point' => $endpoint]);
+
+            // Memanggil makeRequest dari ApiController untuk sinkronisasi dengan endpoint kabupaten/kota
+            $response = $apiController->makeRequest($request);
+
+            // Mengambil data kabupaten/kota dari respons
+            $dataKabupatenKota = $response['data'];
+
+            // Memproses setiap data kabupaten/kota dari respons
+            foreach ($dataKabupatenKota as $data) {
+                // Mencari kabupaten/kota berdasarkan ID
+                $kabupatenKota = KabupatenKota::find($data['kode_kota_kab']);
+
+                // Jika kabupaten/kota ditemukan, perbarui data
+                if ($kabupatenKota) {
+                    $kabupatenKota->update([
+                        'nama' => $data['nama_kota_kab'],
+                        'id_provinsi' => $data['kode_provinsi'],
+                        // Perbarui atribut lain yang diperlukan
+                    ]);
+                } else {
+                    // Jika kabupaten/kota tidak ditemukan, tambahkan data baru
+                    KabupatenKota::create([
+                        'id' => $data['kode_kota_kab'],
+                        'nama' => $data['nama_kota_kab'],
+                        'id_provinsi' => $data['kode_provinsi'],
+                        // Tambahkan atribut lain yang diperlukan
+                    ]);
+                }
+            }
+
+            // Commit transaksi setelah selesai
+            DB::commit();
+
+            // Setelah sinkronisasi selesai, kembalikan respons JSON sukses
+            return response()->json([
+                'status' => 'SUCCESS',
+                'message' => 'Sinkronisasi kabupaten/kota berhasil',
+            ], 200);
+        } catch (\Exception $e) {
+            // Rollback transaksi jika terjadi kesalahan
+            DB::rollBack();
+
+            // Tangani kesalahan yang terjadi selama sinkronisasi
+            return response()->json(['message' => 'Terjadi kesalahan: ' . $e->getMessage()], 500);
+        }
+    }
+
 }

@@ -1,5 +1,7 @@
 <?php
 
+use App\Http\Controllers\ApiController;
+use App\Http\Controllers\ApiKeyController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\ForgotPasswordController;
 use App\Http\Controllers\JenisBisnisController;
@@ -7,6 +9,7 @@ use App\Http\Controllers\JenisKantorController;
 use App\Http\Controllers\KabupatenKotaController;
 use App\Http\Controllers\KategoriBiayaController;
 use App\Http\Controllers\KecamatanController;
+use App\Http\Controllers\KelurahanController;
 use App\Http\Controllers\KprkController;
 use App\Http\Controllers\PenyelenggaraController;
 use App\Http\Controllers\ProvinsiController;
@@ -56,6 +59,14 @@ Route::get('/storage-link', function () {
     return '<h1>storage linked</h1>';
 })->name('optimize');
 
+Route::get('/get-token', [ApiController::class, 'getToken']);
+Route::get('/get-signature', [ApiController::class, 'generateSignature']);
+Route::get('/makeRequest', [ApiController::class, 'makeRequest']);
+Route::get('/syncProvinsi', [ProvinsiController::class, 'syncProvinsi']);
+Route::get('/syncKabupaten-kota', [KabupatenKotaController::class, 'syncKabupaten']);
+Route::get('/syncKecamatan', [KecamatanController::class, 'syncKecamatan']);
+Route::get('/syncKelurahan', [KelurahanController::class, 'syncKelurahan']);
+
 Route::controller(AuthController::class)->group(function () {
     // Route login tidak perlu middleware auth:api
     Route::post('/login', 'login')->name('login');
@@ -92,21 +103,28 @@ Route::get('/chatList/{penerima_id}', [PusherController::class, 'chatDetail']);
 Route::get('/test', [PusherController::class, 'test'])->name('test');
 
 Route::middleware('auth:api')->group(function () {
-    Route::apiResource('user', UserController::class);
-    Route::apiResource('provinsi', ProvinsiController::class);
-    Route::apiResource('kabupaten-kota', KabupatenKotaController::class);
-    Route::apiResource('kecamatan', KecamatanController::class);
-    Route::apiResource('kelurahan', KelurahanController::class);
-    Route::apiResource('jenis-bisnis', JenisBisnisController::class);
-    Route::apiResource('jenis-kantor', JenisKantorController::class);
-    Route::apiResource('kprk', KprkController::class);
-    Route::apiResource('penyelenggara', PenyelenggaraController::class);
-    Route::apiResource('regional', RegionalController::class);
-    Route::apiResource('rekening-biaya', RekeningBiayaController::class);
-    Route::apiResource('rekening-produksi', RekeningProduksiController::class);
-    Route::apiResource('kategori-biaya', KategoriBiayaController::class);
+    Route::post('api-keys', [ApiKeyController::class, 'generateKey'])->name('api-keys.generate');
+    Route::get('api-keys', [ApiKeyController::class, 'index'])->name('api-keys.index');
+    Route::delete('api-keys/{id}', [ApiKeyController::class, 'delete'])->name('api-keys.delete');
+    Route::put('api-keys/deactivate/{id}', [ApiKeyController::class, 'deactivate'])->name('api-keys.deactivate');
 
-    Route::get('status', [UserController::class, 'status'])->name('status');
-    Route::get('grup', [UserController::class, 'grup'])->name('grup');
+    Route::middleware('api_key')->group(function () {
+        Route::apiResource('user', UserController::class);
+        Route::apiResource('provinsi', ProvinsiController::class);
+        Route::apiResource('kabupaten-kota', KabupatenKotaController::class);
+        Route::apiResource('kecamatan', KecamatanController::class);
+        Route::apiResource('kelurahan', KelurahanController::class);
+        Route::apiResource('jenis-bisnis', JenisBisnisController::class);
+        Route::apiResource('jenis-kantor', JenisKantorController::class);
+        Route::apiResource('kprk', KprkController::class);
+        Route::apiResource('penyelenggara', PenyelenggaraController::class);
+        Route::apiResource('regional', RegionalController::class);
+        Route::apiResource('rekening-biaya', RekeningBiayaController::class);
+        Route::apiResource('rekening-produksi', RekeningProduksiController::class);
+        Route::apiResource('kategori-biaya', KategoriBiayaController::class);
 
+        Route::get('status', [UserController::class, 'status'])->name('status');
+        Route::get('grup', [UserController::class, 'grup'])->name('grup');
+
+    });
 });

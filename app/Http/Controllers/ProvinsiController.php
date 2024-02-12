@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Provinsi;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -124,6 +125,64 @@ class ProvinsiController extends Controller
             return response()->json(['status' => 'SUCCESS', 'message' => 'Provinsi deleted successfully']);
         } catch (\Exception $e) {
             return response()->json(['status' => 'ERROR', 'message' => $e->getMessage()], Response::HTTP_INTERNAL_SERVER_ERROR);
+        }
+    }
+    public function syncProvinsi()
+    {
+        try {
+            // Mendefinisikan endpoint untuk sinkronisasi provinsi
+            $endpoint = 'provinsi';
+
+            // Membuat instance dari ApiController
+            $apiController = new ApiController();
+
+            // Membuat instance dari Request dan mengisi access token jika diperlukan
+            $request = new Request();
+            $request->merge(['end_point' => $endpoint]);
+
+            // Memanggil makeRequest dari ApiController untuk sinkronisasi dengan endpoint provinsi
+            $response = $apiController->makeRequest($request);
+
+            // Mengambil data provinsi dari respons
+            $dataProvinsi = $response['data'];
+
+            // Memulai transaksi database untuk meningkatkan kinerja
+            DB::beginTransaction();
+
+            // Memproses setiap data provinsi dari respons
+            foreach ($dataProvinsi as $data) {
+                // Mencari provinsi berdasarkan ID
+                $provinsi = Provinsi::find($data['kode_provinsi']);
+
+                // Jika provinsi ditemukan, perbarui data
+                if ($provinsi) {
+                    $provinsi->update([
+                        'nama' => $data['nama_provinsi'],
+                        // Perbarui atribut lain yang diperlukan
+                    ]);
+                } else {
+                    // Jika provinsi tidak ditemukan, tambahkan data baru
+                    Provinsi::create([
+                        'id' => $data['kode_provinsi'],
+                        'nama' => $data['nama_provinsi'],
+                        // Tambahkan atribut lain yang diperlukan
+                    ]);
+                }
+            }
+
+            // Commit transaksi setelah selesai
+            DB::commit();
+
+            // Setelah sinkronisasi selesai, kembalikan respons JSON sukses
+            return response()->json([
+                'status' => 'SUCCESS',
+                'message' => 'Sinkronisasi provinsi berhasil'], 200);
+        } catch (\Exception $e) {
+            // Rollback transaksi jika terjadi kesalahan
+            DB::rollBack();
+
+            // Tangani kesalahan yang terjadi selama sinkronisasi
+            return response()->json(['message' => 'Terjadi kesalahan: ' . $e->getMessage()], 500);
         }
     }
 }
