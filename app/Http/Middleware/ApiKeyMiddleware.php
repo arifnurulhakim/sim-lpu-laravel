@@ -11,7 +11,7 @@ class ApiKeyMiddleware
     public function handle(Request $request, Closure $next)
     {
         // Mendapatkan API key dari header 'api_key'
-        $apiKey = $request->header('api_key');
+        $apiKey = $request->header('api-key');
 
         // Jika API key tidak tersedia, maka kembalikan response error
         if (!$apiKey) {

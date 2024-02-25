@@ -3,6 +3,7 @@
 use App\Http\Controllers\ApiController;
 use App\Http\Controllers\ApiKeyController;
 use App\Http\Controllers\AuthController;
+use App\Http\Controllers\BiayaAtribusiController;
 use App\Http\Controllers\ForgotPasswordController;
 use App\Http\Controllers\JenisBisnisController;
 use App\Http\Controllers\JenisKantorController;
@@ -18,6 +19,7 @@ use App\Http\Controllers\RegionalController;
 use App\Http\Controllers\RekeningBiayaController;
 use App\Http\Controllers\RekeningProduksiController;
 use App\Http\Controllers\ResetPasswordController;
+use App\Http\Controllers\SyncApiController;
 use App\Http\Controllers\UserController;
 use Illuminate\Support\Facades\Route;
 
@@ -66,6 +68,17 @@ Route::get('/syncProvinsi', [ProvinsiController::class, 'syncProvinsi']);
 Route::get('/syncKabupaten-kota', [KabupatenKotaController::class, 'syncKabupaten']);
 Route::get('/syncKecamatan', [KecamatanController::class, 'syncKecamatan']);
 Route::get('/syncKelurahan', [KelurahanController::class, 'syncKelurahan']);
+
+Route::get('/syncRegional', [SyncApiController::class, 'syncRegional']);
+Route::get('/syncKategoriBiaya', [SyncApiController::class, 'syncKategoriBiaya']);
+Route::get('/syncRekeningBiaya', [SyncApiController::class, 'syncRekeningBiaya']);
+Route::get('/syncRekeningProduksi', [SyncApiController::class, 'syncRekeningProduksi']);
+Route::get('/syncTipeBisnis', [SyncApiController::class, 'syncTipeBisnis']);
+Route::get('/syncPetugasKCP', [SyncApiController::class, 'syncPetugasKCP']);
+Route::get('/syncKCU', [SyncApiController::class, 'syncKCU']);
+Route::get('/syncKPC', [SyncApiController::class, 'syncKPC']);
+Route::get('/syncBiayaAtribusi', [SyncApiController::class, 'syncBiayaAtribusi']);
+Route::get('/syncProduksi', [SyncApiController::class, 'syncProduksi']);
 
 Route::controller(AuthController::class)->group(function () {
     // Route login tidak perlu middleware auth:api
@@ -125,6 +138,9 @@ Route::middleware('auth:api')->group(function () {
 
         Route::get('status', [UserController::class, 'status'])->name('status');
         Route::get('grup', [UserController::class, 'grup'])->name('grup');
+
+        Route::get('atribusi-tahun', [BiayaAtribusiController::class, 'getPerTahun'])->name('atribusi-tahun');
+        Route::get('atribusi-regional', [BiayaAtribusiController::class, 'getPerRegional'])->name('atribusi-regional');
 
     });
 });

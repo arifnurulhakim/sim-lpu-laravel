@@ -145,6 +145,9 @@ class ProvinsiController extends Controller
 
             // Mengambil data provinsi dari respons
             $dataProvinsi = $response['data'];
+            if (!$dataProvinsi) {
+                return response()->json(['message' => 'Terjadi kesalahan: sync error'], 500);
+            }
 
             // Memulai transaksi database untuk meningkatkan kinerja
             DB::beginTransaction();

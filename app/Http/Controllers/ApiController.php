@@ -11,7 +11,11 @@ class ApiController extends Controller
 {
     public function getToken()
     {
-        // Ganti dengan Client ID dan Client Secret yang benar
+        // // local
+        // $clientId = 'iZ7xi4wV2S6y_Cq0byTDcn9Q46Ua';
+        // $clientSecret = '9dqwxTmtsUsfdtyawFdbjBxDpaUa';
+
+        // prod
         $clientId = 'iZ7xi4wV2S6y_Cq0byTDcn9Q46Ua';
         $clientSecret = '9dqwxTmtsUsfdtyawFdbjBxDpaUa';
 
@@ -20,7 +24,7 @@ class ApiController extends Controller
 
         $response = Http::asForm()->withHeaders([
             'Authorization' => 'Basic ' . $authorization,
-        ])->post('https://sandbox.posindonesia.co.id:8245/token', [
+        ])->post('https://api.posindonesia.co.id:8245/token', [
             'grant_type' => 'client_credentials',
         ]);
 
@@ -37,7 +41,7 @@ class ApiController extends Controller
     public static function generateSignature()
     {
         // dd(Auth::user());
-        $relativeUrl = 'https://sandbox.posindonesia.co.id:8245/pso/1.0.0/data/tipe_bisnis';
+        $relativeUrl = 'https://api.posindonesia.co.id:8245/pso/1.0.0/data/tipe_bisnis';
         $HttpMethod = "GET";
         $timestamp = Carbon::now()->toIso8601String();
         // dd($timestamp);
@@ -62,9 +66,9 @@ class ApiController extends Controller
         // Kombinasikan Client ID dan Client Secret dalam format yang benar untuk otentikasi HTTP Basic
         $authorization = base64_encode($clientId . ':' . $clientSecret);
 
-        $response = Http::asForm()->withHeaders([
+        $response = Http::timeout(0)->asForm()->withHeaders([
             'Authorization' => 'Basic ' . $authorization,
-        ])->post('https://sandbox.posindonesia.co.id:8245/token', [
+        ])->post('https://api.posindonesia.co.id:8245/token', [
             'grant_type' => 'client_credentials',
         ]);
         $accessToken = '';
@@ -74,9 +78,10 @@ class ApiController extends Controller
             $accessToken = $response['access_token'];
 
         }
+        // dd($accessToken);
 
         // dd($request->access_token);
-        $url = 'https://sandbox.posindonesia.co.id:8245';
+        $url = 'https://api.posindonesia.co.id:8245';
         $relativeUrl = '/pso/1.0.0/data/' . $request->end_point;
         $HttpMethod = "GET";
         $timestamp = Carbon::now()->toIso8601String();
@@ -93,7 +98,7 @@ class ApiController extends Controller
                 'headers' => [
                     'Authorization' => 'Bearer ' . $access_token,
                     'Content-Type' => 'application/json',
-                    'Origin' => 'sandbox.jmc.co.id',
+                    'Origin' => 'api.jmc.co.id',
                     'X-POS-Key' => 'a29taW5mbw==dEpUaDhDRXg3dw==',
                     'X-POS-Timestamp' => $timestamp,
                     'X-POS-Signature' => hash_hmac('sha256', $StringToSign, $secret_key),
