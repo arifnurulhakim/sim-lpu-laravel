@@ -4,6 +4,8 @@ namespace App\Http\Controllers;
 
 use App\Models\BiayaAtribusi;
 use App\Models\BiayaAtribusiDetail;
+// use App\Models\VerifikasiBiayaAtribusi;
+// use App\Models\VerifikasiBiayaAtribusiDetail;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
@@ -224,6 +226,103 @@ class BiayaAtribusiController extends Controller
                 ->join('biaya_atribusi', 'biaya_atribusi_detail.id_biaya_atribusi', '=', 'biaya_atribusi.id')
                 ->join('kprk', 'biaya_atribusi.id_kprk', '=', 'kprk.id')
                 ->join('regional', 'biaya_atribusi.id_regional', '=', 'regional.id')
+                ->groupBy('kprk.id', 'biaya_atribusi.id_regional', 'biaya_atribusi.triwulan', 'biaya_atribusi.tahun_anggaran', 'regional.nama')
+                ->offset($offset)
+                ->limit($limit);
+
+            if ($search !== '') {
+                $atribusiQuery->where('kprk.nama', 'like', "%$search%");
+            }
+            if ($id_regional !== '') {
+                $atribusiQuery->where('biaya_atribusi.id_regional', $id_regional);
+            }
+            if ($tahun !== '') {
+                $atribusiQuery->where('biaya_atribusi.tahun_anggaran', $tahun);
+            }
+
+            if ($triwulan !== '') {
+                $atribusiQuery->where('biaya_atribusi.triwulan', $triwulan);
+            }
+
+            if ($status !== '') {
+                // Anda perlu menyesuaikan kondisi WHERE ini sesuai dengan struktur tabel dan kondisi yang diinginkan.
+                // Misalnya: $atribusiQuery->where('status', $status);
+            }
+            $atribusi = $atribusiQuery->get();
+
+            // Mengubah format total_biaya menjadi format Rupiah
+            foreach ($atribusi as $item) {
+                $item->total_biaya = "Rp " . number_format($item->total_biaya, 0, ',', '.');
+            }
+
+            return response()->json([
+                'status' => 'SUCCESS',
+                'offset' => $offset,
+                'limit' => $limit,
+                'order' => $getOrder,
+                'search' => $search,
+                'data' => $atribusi,
+            ]);
+        } catch (\Exception $e) {
+            return response()->json(['status' => 'ERROR', 'message' => $e->getMessage()], Response::HTTP_INTERNAL_SERVER_ERROR);
+        }
+    }
+    public function getPerKCsssU(Request $request)
+    {
+        try {
+            $offset = request()->get('offset', 0);
+            $limit = request()->get('limit', 100);
+            $search = request()->get('search', '');
+            $getOrder = request()->get('order', '');
+            $id_kcu = request()->get('id_regional', '');
+            $tahun = request()->get('tahun', '');
+            $triwulan = request()->get('triwulan', '');
+            $status = request()->get('status', '');
+            $validator = Validator::make($request->all(), [
+                'nama' => 'required|string',
+                'tahun' => 'nullable|numeric',
+                'triwulan' => 'nullable|numeric|in:1,2,3,4',
+                'id_regional' => 'nullable|numeric|exists:regional,id',
+                'status' => 'nullable|string|in:7,9',
+            ]);
+            $defaultOrder = $getOrder ? $getOrder : "kprk.nama ASC";
+            $orderMappings = [
+                'namaASC' => 'kprk.nama ASC',
+                'namaDESC' => 'kprk.nama DESC',
+                'triwulanASC' => 'biaya_atribusi.triwulan ASC',
+                'triwulanDESC' => 'biaya_atribusi.triwulan DESC',
+                'tahunASC' => 'biaya_atribusi.tahun_anggaran ASC',
+                'tahunDESC' => 'biaya_atribusi.tahun_anggaran DESC',
+            ];
+
+            // Set the order based on the mapping or use the default order if not found
+            $order = $orderMappings[$getOrder] ?? $defaultOrder;
+            // Validation rules for input parameters
+            $validOrderValues = implode(',', array_keys($orderMappings));
+            $rules = [
+                'offset' => 'integer|min:0',
+                'limit' => 'integer|min:1',
+                'order' => "in:$validOrderValues",
+            ];
+
+            $validator = Validator::make([
+                'offset' => $offset,
+                'limit' => $limit,
+                'order' => $getOrder,
+            ], $rules);
+
+            if ($validator->fails()) {
+                return response()->json([
+                    'status' => 'ERROR',
+                    'message' => 'Invalid input parameters',
+                    'errors' => $validator->errors(),
+                ], 400);
+            }
+            $atribusiQuery = BiayaAtribusiDetail::orderByRaw($order)
+                ->select('biaya_atribusi.triwulan', 'biaya_atribusi.tahun_anggaran', 'regional.nama as nama_regional', 'kprk.nama as nama_kcu', DB::raw('SUM(biaya_atribusi_detail.pelaporan) as total_biaya'))
+                ->join('biaya_atribusi', 'biaya_atribusi_detail.id_biaya_atribusi', '=', 'biaya_atribusi.id')
+                ->join('kprk', 'biaya_atribusi.id_kprk', '=', 'kprk.id')
+                ->join('regional', 'biaya_atribusi.id_regional', '=', 'regional.id')
                 ->groupBy('kprk.id', 'biaya_atribusi.id_regional', 'biaya_atribusi.triwulan', 'biaya_atribusi.tahun_anggaran')
                 ->offset($offset)
                 ->limit($limit);
@@ -259,6 +358,206 @@ class BiayaAtribusiController extends Controller
                 'limit' => $limit,
                 'order' => $getOrder,
                 'search' => $search,
+                'data' => $atribusi,
+            ]);
+        } catch (\Exception $e) {
+            return response()->json(['status' => 'ERROR', 'message' => $e->getMessage()], Response::HTTP_INTERNAL_SERVER_ERROR);
+        }
+    }
+
+    public function getPerKCU(Request $request)
+    {
+        try {
+            $offset = request()->get('offset', 0);
+            $limit = request()->get('limit', 100);
+            $getOrder = request()->get('order', '');
+            $id_biaya_atribusi = request()->get('id_biaya_atribusi', '');
+            $tahun = request()->get('tahun', '');
+            $triwulan = request()->get('triwulan', '');
+            $status = request()->get('status', '');
+            $validator = Validator::make($request->all(), [
+
+                'triwulan' => 'nullable|numeric|in:1,2,3,4',
+                'id_biaya_atribusi' => 'nullable|numeric|exists:biaya_atribusi,id',
+            ]);
+            $defaultOrder = $getOrder ? $getOrder : "rekening_biaya.kode_rekening ASC";
+            $orderMappings = [
+                'koderekeningASC' => 'rekening_biaya.koderekening ASC',
+                'koderekeningDESC' => 'rekening_biaya.koderekening DESC',
+                'namaASC' => 'rekening_biaya.nama ASC',
+                'namaDESC' => 'rekening_biaya.nama DESC',
+            ];
+            // dd($request->id_biaya_atribusi);
+
+            // Set the order based on the mapping or use the default order if not found
+            $order = $orderMappings[$getOrder] ?? $defaultOrder;
+            // Validation rules for input parameters
+            $validOrderValues = implode(',', array_keys($orderMappings));
+            $rules = [
+                'offset' => 'integer|min:0',
+                'limit' => 'integer|min:1',
+                'order' => "in:$validOrderValues",
+            ];
+
+            $validator = Validator::make([
+                'offset' => $offset,
+                'limit' => $limit,
+                'order' => $getOrder,
+            ], $rules);
+
+            if ($validator->fails()) {
+                return response()->json([
+                    'status' => 'ERROR',
+                    'message' => 'Invalid input parameters',
+                    'errors' => $validator->errors(),
+                ], 400);
+            }
+            $atribusiQuery = BiayaAtribusiDetail::orderByRaw($order)
+                ->select(
+                    'rekening_biaya.kode_rekening',
+                    'rekening_biaya.nama as nama_rekening',
+                    'biaya_atribusi.triwulan',
+                    'biaya_atribusi.tahun_anggaran',
+                    'biaya_atribusi_detail.bulan',
+                )
+                ->join('biaya_atribusi', 'biaya_atribusi_detail.id_biaya_atribusi', '=', 'biaya_atribusi.id')
+                ->join('rekening_biaya', 'biaya_atribusi_detail.id_rekening_biaya', '=', 'rekening_biaya.id')
+                ->where('biaya_atribusi_detail.id_biaya_atribusi', $request->id_biaya_atribusi)
+                ->groupBy('rekening_biaya.kode_rekening', 'biaya_atribusi_detail.bulan')
+                ->get();
+
+            $groupedAtribusi = [];
+            $laporanArray = [];
+            foreach ($atribusiQuery as $item) {
+                $kodeRekening = $item->kode_rekening;
+                $triwulan = $item->triwulan;
+
+                // Jika kode_rekening belum ada dalam array groupedAtribusi, inisialisasikan dengan array kosong
+                if (!isset($groupedAtribusi[$kodeRekening])) {
+                    $groupedAtribusi[$kodeRekening] = [
+                        'kode_rekening' => $kodeRekening,
+                        'nama_rekening' => $item->nama_rekening,
+                        'laporan' => $laporanArray, // Inisialisasi array laporan per kode rekening
+                    ];
+                }
+
+                // Tentukan bulan-bulan berdasarkan triwulan
+                $bulanAwalTriwulan = ($triwulan - 1) * 3 + 1;
+                $bulanAkhirTriwulan = $bulanAwalTriwulan + 2;
+
+                // Ubah format bulan dari angka menjadi nama bulan dalam bahasa Indonesia
+                $bulanIndonesia = [
+                    'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
+                    'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember',
+                ];
+
+                // Bersihkan $laporanArray sebelum iterasi
+                $laporanArray = [];
+
+                for ($i = $bulanAwalTriwulan; $i <= $bulanAkhirTriwulan; $i++) {
+                    // Ubah format bulan dari angka menjadi nama bulan dalam bahasa Indonesia
+                    $bulanString = $bulanIndonesia[$i - 1];
+                    $bulan = $i;
+                    $getPelaporan = BiayaAtribusiDetail::select(DB::raw('SUM(pelaporan) as total_pelaporan'),
+                        DB::raw('SUM(verifikasi) as total_verifikasi'))
+                        ->where('bulan', $bulan)
+                        ->where('id_rekening_biaya', $kodeRekening)
+                        ->where('id_biaya_atribusi', $request->id_biaya_atribusi)
+                        ->get();
+
+                    // Pastikan query menghasilkan data sebelum memprosesnya
+                    if ($getPelaporan->isNotEmpty()) {
+                        $pelaporan = 'Rp. ' . number_format($getPelaporan[0]->total_pelaporan, 2, ',', '.');
+                        $verifikasi = 'Rp. ' . number_format($getPelaporan[0]->total_verifikasi, 2, ',', '.');
+                    } else {
+                        $pelaporan = 'Rp. 0,00';
+                        $verifikasi = 'Rp. 0,00';
+                    }
+
+                    // Tambahkan data ke dalam array laporan
+                    $laporanArray[] = [
+                        'bulan_string' => $bulanString,
+                        'bulan' => $bulan,
+                        'pelaporan' => $pelaporan,
+                        'verifikasi' => $verifikasi,
+                    ];
+                }
+
+                // Tambahkan laporanArray ke dalam groupedAtribusi
+                $groupedAtribusi[$kodeRekening]['laporan'] = $laporanArray;
+            }
+            return response()->json([
+                'status' => 'SUCCESS',
+                'offset' => $offset,
+                'limit' => $limit,
+                'order' => $order,
+                'data' => array_values($groupedAtribusi),
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json(['status' => 'ERROR', 'message' => $e->getMessage()], Response::HTTP_INTERNAL_SERVER_ERROR);
+        }
+    }
+
+    public function getDetail(Request $request)
+    {
+        // href="/backend/verifikasi_biaya_atribusi_detail/update?a=2270020231&b=5102050004&c=1&d=2023&e=01"
+
+        // href="/backend/verifikasi_biaya_atribusi_detail/update?a=2270020231&b=5102050004&c=1&d=2023&e=02"
+        try {
+
+            $id_biaya_atribusi = request()->get('id_biaya_atribusi', '');
+            $kode_rekening = request()->get('kode_rekening', '');
+            $bulan = request()->get('bulan', '');
+            $validator = Validator::make($request->all(), [
+                'bulan' => 'nullable|numeric|in:1,2,3',
+                'id_rekening_biaya' => 'nullable|numeric|exists:rekening_biaya,id',
+                'id_biaya_atribusi' => 'nullable|numeric|exists:biaya_atribusi,id',
+            ]);
+            if ($validator->fails()) {
+                return response()->json([
+                    'status' => 'ERROR',
+                    'message' => 'Invalid input parameters',
+                    'errors' => $validator->errors(),
+                ], 400);
+            }
+            $bulanIndonesia = [
+                'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
+                'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember',
+            ];
+
+            $atribusi = BiayaAtribusiDetail::select(
+                'biaya_atribusi_detail.id as id_biaya_atribusi_detail                                                                                                                                           ',
+                'rekening_biaya.kode_rekening',
+                'rekening_biaya.nama as nama_rekening',
+                'biaya_atribusi.tahun_anggaran',
+                DB::raw("CONCAT('Triwulan ', biaya_atribusi.triwulan, ' - ', '" . $bulanIndonesia[$request->bulan - 1] . "') AS periode"),
+
+                'biaya_atribusi_detail.keterangan',
+                'biaya_atribusi_detail.lampiran',
+                'biaya_atribusi_detail.pelaporan',
+                'biaya_atribusi_detail.verifikasi',
+                'biaya_atribusi_detail.catatan_pemeriksa',
+                // 'kprk.nama',
+            )
+
+                ->where('biaya_atribusi_detail.id_biaya_atribusi', $request->id_biaya_atribusi)
+                ->where('biaya_atribusi_detail.id_rekening_biaya', $request->kode_rekening)
+                ->where('biaya_atribusi_detail.bulan', $request->bulan)
+                ->join('biaya_atribusi', 'biaya_atribusi_detail.id_biaya_atribusi', '=', 'biaya_atribusi.id')
+                ->join('rekening_biaya', 'biaya_atribusi_detail.id_rekening_biaya', '=', 'rekening_biaya.id')
+                ->join('kprk', 'biaya_atribusi.id_kprk', '=', 'kprk.id')
+                ->get();
+            // dd($atribusi);
+
+            // Mengubah format total_biaya menjadi format Rupiah
+            foreach ($atribusi as $item) {
+                $item->pelaporan = "Rp " . number_format($item->pelaporan, 2, ',', '.');
+                $item->verifikasi = "Rp " . number_format($item->verifikasi, 2, ',', '.');
+            }
+
+            return response()->json([
+                'status' => 'SUCCESS',
                 'data' => $atribusi,
             ]);
         } catch (\Exception $e) {
