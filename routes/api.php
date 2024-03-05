@@ -141,6 +141,8 @@ Route::middleware('auth:api')->group(function () {
 
         Route::get('atribusi-tahun', [BiayaAtribusiController::class, 'getPerTahun'])->name('atribusi-tahun');
         Route::get('atribusi-regional', [BiayaAtribusiController::class, 'getPerRegional'])->name('atribusi-regional');
+        Route::get('atribusi-kcu', [BiayaAtribusiController::class, 'getPerKCU'])->name('atribusi-kcu');
+        Route::get('atribusi-detail', [BiayaAtribusiController::class, 'getDetail'])->name('atribusi-detail');
 
     });
 });
