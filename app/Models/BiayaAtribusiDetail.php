@@ -12,14 +12,17 @@ class BiayaAtribusiDetail extends Model
     use HasFactory;
     protected $fillable = [
         'id',
-        'id_regional',
-        'id_kprk',
-        'tahun_anggaran',
-        'triwulan',
-        'total_biaya',
-        'tgl_sinkronisasi',
-        'id_status',
-        'id_status_kprk',
+        'id_biaya_atribusi',
+        'id_rekening_biaya',
+        'id_rekening_biaya_atribusi',
+        'bulan',
+        'pelaporan',
+        'verifikasi',
+        'keterangan',
+        'catatan_pemeriksa',
+        'lampiran',
+        'id_verifikator',
+        'tgl_verifikasi',
     ];
 
     // Jika Anda memiliki relasi dengan model lain, Anda dapat mendefinisikannya di sini

@@ -143,6 +143,7 @@ Route::middleware('auth:api')->group(function () {
         Route::get('atribusi-regional', [BiayaAtribusiController::class, 'getPerRegional'])->name('atribusi-regional');
         Route::get('atribusi-kcu', [BiayaAtribusiController::class, 'getPerKCU'])->name('atribusi-kcu');
         Route::get('atribusi-detail', [BiayaAtribusiController::class, 'getDetail'])->name('atribusi-detail');
+        Route::post('atribusi-verifikasi', [BiayaAtribusiController::class, 'verifikasi'])->name('atribusi-verifikasi');
 
     });
 });
