@@ -2,18 +2,17 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\BiayaAtribusi;
-use App\Models\BiayaAtribusiDetail;
 use App\Models\Status;
+use App\Models\VerifikasiBiayaRutin;
+use App\Models\VerifikasiBiayaRutinDetail;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 use Symfony\Component\HttpFoundation\Response;
 
-class BiayaAtribusiController extends Controller
+class VerifikasiBiayaRutinController extends Controller
 {
-
     public function getPerTahun(Request $request)
     {
         try {
@@ -43,10 +42,10 @@ class BiayaAtribusiController extends Controller
             $orderMappings = [
                 'namaASC' => 'regional.nama ASC',
                 'namaDESC' => 'regional.nama DESC',
-                'triwulanASC' => 'biaya_atribusi.triwulan ASC',
-                'triwulanDESC' => 'biaya_atribusi.triwulan DESC',
-                'tahunASC' => 'biaya_atribusi.tahun_anggaran ASC',
-                'tahunDESC' => 'biaya_atribusi.tahun_anggaran DESC',
+                'triwulanASC' => 'verifikasi_biaya_rutin.triwulan ASC',
+                'triwulanDESC' => 'verifikasi_biaya_rutin.triwulan DESC',
+                'tahunASC' => 'verifikasi_biaya_rutin.tahun ASC',
+                'tahunDESC' => 'verifikasi_biaya_rutin.tahun DESC',
             ];
 
             // Set the order based on the mapping or use the default order if not found
@@ -73,46 +72,46 @@ class BiayaAtribusiController extends Controller
                 ], 400);
             }
 
-            $atribusiQuery = BiayaAtribusi::orderByRaw($order)
-                ->select('biaya_atribusi.id_regional', 'biaya_atribusi.triwulan', 'biaya_atribusi.tahun_anggaran', 'regional.nama as nama_regional', DB::raw('SUM(biaya_atribusi.total_biaya) as total_biaya'))
-                ->join('regional', 'biaya_atribusi.id_regional', '=', 'regional.id')
-                ->groupBy('biaya_atribusi.id_regional', 'biaya_atribusi.triwulan', 'biaya_atribusi.tahun_anggaran')
+            $rutinQuery = VerifikasiBiayaRutin::orderByRaw($order)
+                ->select('verifikasi_biaya_rutin.id_regional', 'verifikasi_biaya_rutin.triwulan', 'verifikasi_biaya_rutin.tahun', 'regional.nama as nama_regional', DB::raw('SUM(verifikasi_biaya_rutin.total_biaya) as total_biaya'))
+                ->join('regional', 'verifikasi_biaya_rutin.id_regional', '=', 'regional.id')
+                ->groupBy('verifikasi_biaya_rutin.id_regional', 'verifikasi_biaya_rutin.triwulan', 'verifikasi_biaya_rutin.tahun')
                 ->offset($offset)
                 ->limit($limit);
 
             if ($search !== '') {
-                $atribusiQuery->where('nama_regional', 'like', "%$search%");
+                $rutinQuery->where('nama_regional', 'like', "%$search%");
             }
 
             // Menambahkan kondisi WHERE berdasarkan variabel $tahun, $triwulan, dan $status
             if ($tahun !== '') {
-                $atribusiQuery->where('biaya_atribusi.tahun_anggaran', $tahun);
+                $rutinQuery->where('verifikasi_biaya_rutin.tahun', $tahun);
             }
 
             if ($triwulan !== '') {
-                $atribusiQuery->where('biaya_atribusi.triwulan', $triwulan);
+                $rutinQuery->where('verifikasi_biaya_rutin.triwulan', $triwulan);
             }
             if ($status !== '') {
-                $atribusiQuery->where('biaya_atribusi.id_status', $status);
+                $rutinQuery->where('verifikasi_biaya_rutin.id_status', $status);
             }
 
-            $atribusi = $atribusiQuery->get();
+            $rutin = $rutinQuery->get();
 
-            $grand_total = $atribusi->sum('total_biaya');
+            $grand_total = $rutin->sum('total_biaya');
             $grand_total = "Rp " . number_format($grand_total, 2, ',', '.');
             // Mengubah format total_biaya menjadi format Rupiah
-            foreach ($atribusi as $item) {
+            foreach ($rutin as $item) {
                 $item->total_biaya = "Rp " . number_format($item->total_biaya, 2, ',', '.');
 
-                // Ambil BiayaAtribusi dengan kriteria tertentu
-                $getBiayaAtribusi = BiayaAtribusi::where('tahun_anggaran', $item->tahun_anggaran)
+                // Ambil VerifikasiBiayaRutin dengan kriteria tertentu
+                $getBiayaRutin = VerifikasiBiayaRutin::where('tahun', $item->tahun)
                     ->where('id_regional', $item->id_regional)
                     ->where('triwulan', $item->triwulan)
                     ->get();
 
-                // Periksa apakah semua status dalam $getBiayaAtribusi adalah 9
-                $semuaStatusSembilan = $getBiayaAtribusi->every(function ($biayaAtribusi) {
-                    return $biayaAtribusi->id_status == 9;
+                // Periksa apakah semua status dalam $getBiayaRutin adalah 9
+                $semuaStatusSembilan = $getBiayaRutin->every(function ($biayaRutin) {
+                    return $biayaRutin->id_status == 9;
                 });
 
                 // Jika semua status adalah 9, ambil status dari tabel Status
@@ -132,7 +131,7 @@ class BiayaAtribusiController extends Controller
                 'order' => $getOrder,
                 'search' => $search,
                 'grand_total' => $grand_total,
-                'data' => $atribusi,
+                'data' => $rutin,
             ]);
         } catch (\Exception $e) {
             return response()->json(['status' => 'ERROR', 'message' => $e->getMessage()], Response::HTTP_INTERNAL_SERVER_ERROR);
@@ -166,10 +165,10 @@ class BiayaAtribusiController extends Controller
             $orderMappings = [
                 'namaASC' => 'kprk.nama ASC',
                 'namaDESC' => 'kprk.nama DESC',
-                'triwulanASC' => 'biaya_atribusi.triwulan ASC',
-                'triwulanDESC' => 'biaya_atribusi.triwulan DESC',
-                'tahunASC' => 'biaya_atribusi.tahun_anggaran ASC',
-                'tahunDESC' => 'biaya_atribusi.tahun_anggaran DESC',
+                'triwulanASC' => 'verifikasi_biaya_rutin.triwulan ASC',
+                'triwulanDESC' => 'verifikasi_biaya_rutin.triwulan DESC',
+                'tahunASC' => 'verifikasi_biaya_rutin.tahun ASC',
+                'tahunDESC' => 'verifikasi_biaya_rutin.tahun DESC',
             ];
 
             // Set the order based on the mapping or use the default order if not found
@@ -195,48 +194,48 @@ class BiayaAtribusiController extends Controller
                     'errors' => $validator->errors(),
                 ], 400);
             }
-            $atribusiQuery = BiayaAtribusiDetail::orderByRaw($order)
-                ->select('biaya_atribusi.id', 'biaya_atribusi.triwulan', 'biaya_atribusi.tahun_anggaran', 'regional.nama as nama_regional', 'kprk.id as id_kcu', 'kprk.nama as nama_kcu', DB::raw('SUM(biaya_atribusi_detail.pelaporan) as total_biaya'))
-                ->join('biaya_atribusi', 'biaya_atribusi_detail.id_biaya_atribusi', '=', 'biaya_atribusi.id')
-                ->join('kprk', 'biaya_atribusi.id_kprk', '=', 'kprk.id')
-                ->join('regional', 'biaya_atribusi.id_regional', '=', 'regional.id')
-                ->groupBy('kprk.id', 'biaya_atribusi.id_regional', 'biaya_atribusi.triwulan', 'biaya_atribusi.tahun_anggaran', 'regional.nama')
+            $rutinQuery = VerifikasiBiayaRutinDetail::orderByRaw($order)
+                ->select('verifikasi_biaya_rutin.id', 'verifikasi_biaya_rutin.triwulan', 'verifikasi_biaya_rutin.tahun', 'regional.nama as nama_regional', 'kprk.id as id_kcu', 'kprk.nama as nama_kcu', DB::raw('SUM(verifikasi_biaya_rutin_detail.pelaporan) as total_biaya'))
+                ->join('verifikasi_biaya_rutin', 'verifikasi_biaya_rutin_detail.id_verifikasi_biaya_rutin', '=', 'verifikasi_biaya_rutin.id')
+                ->join('kprk', 'verifikasi_biaya_rutin.id_kprk', '=', 'kprk.id')
+                ->join('regional', 'verifikasi_biaya_rutin.id_regional', '=', 'regional.id')
+                ->groupBy('kprk.id', 'verifikasi_biaya_rutin.id_regional', 'verifikasi_biaya_rutin.triwulan', 'verifikasi_biaya_rutin.tahun', 'regional.nama')
                 ->offset($offset)
                 ->limit($limit);
 
             if ($search !== '') {
-                $atribusiQuery->where('kprk.nama', 'like', "%$search%");
+                $rutinQuery->where('kprk.nama', 'like', "%$search%");
             }
             if ($id_regional !== '') {
-                $atribusiQuery->where('biaya_atribusi.id_regional', $id_regional);
+                $rutinQuery->where('verifikasi_biaya_rutin.id_regional', $id_regional);
             }
             if ($tahun !== '') {
-                $atribusiQuery->where('biaya_atribusi.tahun_anggaran', $tahun);
+                $rutinQuery->where('verifikasi_biaya_rutin.tahun', $tahun);
             }
 
             if ($triwulan !== '') {
-                $atribusiQuery->where('biaya_atribusi.triwulan', $triwulan);
+                $rutinQuery->where('verifikasi_biaya_rutin.triwulan', $triwulan);
             }
 
             if ($status !== '') {
-                $atribusiQuery->where('biaya_atribusi.id_status', $status);
+                $rutinQuery->where('verifikasi_biaya_rutin.id_status', $status);
             }
 
-            $atribusi = $atribusiQuery->get();
+            $rutin = $rutinQuery->get();
 
             // Mengubah format total_biaya menjadi format Rupiah
-            foreach ($atribusi as $item) {
+            foreach ($rutin as $item) {
                 $item->total_biaya = "Rp " . number_format($item->total_biaya, 2, ',', '.');
 
-                // Ambil BiayaAtribusi dengan kriteria tertentu
-                $getBiayaAtribusi = BiayaAtribusi::where('tahun_anggaran', $item->tahun_anggaran)
+                // Ambil VerifikasiBiayaRutin dengan kriteria tertentu
+                $getBiayaRutin = VerifikasiBiayaRutin::where('tahun', $item->tahun)
                     ->where('id_regional', $item->id_regional)
                     ->where('triwulan', $item->triwulan)
                     ->get();
 
-                // Periksa apakah semua status dalam $getBiayaAtribusi adalah 9
-                $semuaStatusSembilan = $getBiayaAtribusi->every(function ($biayaAtribusi) {
-                    return $biayaAtribusi->id_status == 9;
+                // Periksa apakah semua status dalam $getBiayaRutin adalah 9
+                $semuaStatusSembilan = $getBiayaRutin->every(function ($biayaRutin) {
+                    return $biayaRutin->id_status == 9;
                 });
 
                 // Jika semua status adalah 9, ambil status dari tabel Status
@@ -255,24 +254,20 @@ class BiayaAtribusiController extends Controller
                 'limit' => $limit,
                 'order' => $getOrder,
                 'search' => $search,
-                'data' => $atribusi,
+                'data' => $rutin,
             ]);
         } catch (\Exception $e) {
             return response()->json(['status' => 'ERROR', 'message' => $e->getMessage()], Response::HTTP_INTERNAL_SERVER_ERROR);
         }
     }
-
     public function getPerKCU(Request $request)
     {
         try {
-            $offset = request()->get('offset', 0);
-            $limit = request()->get('limit', 100);
-            $getOrder = request()->get('order', '');
-            $id_biaya_atribusi = request()->get('id_biaya_atribusi', '');
-            $id_kcu = request()->get('id_kcu', '');
             $validator = Validator::make($request->all(), [
-                'id_biaya_atribusi' => 'nullable|numeric|exists:biaya_atribusi,id',
+                'tahun' => 'nullable|numeric',
+                'triwulan' => 'nullable|numeric|in:1,2,3,4',
                 'id_kcu' => 'nullable|numeric|exists:kprk,id',
+                'status' => 'nullable|string|in:7,9',
             ]);
             if ($validator->fails()) {
                 return response()->json([
@@ -281,14 +276,25 @@ class BiayaAtribusiController extends Controller
                     'error_code' => 'INPUT_VALIDATION_ERROR',
                 ], 422);
             }
-            $defaultOrder = $getOrder ? $getOrder : "rekening_biaya.kode_rekening ASC";
+            $offset = request()->get('offset', 0);
+            $limit = request()->get('limit', 100);
+            $search = request()->get('search', '');
+            $getOrder = request()->get('order', '');
+            $id_kcu = request()->get('id_kcu', '');
+            $tahun = request()->get('tahun', '');
+            $triwulan = request()->get('triwulan', '');
+            $status = request()->get('status', '');
+            $defaultOrder = $getOrder ? $getOrder : "kpc.id ASC";
             $orderMappings = [
-                'koderekeningASC' => 'rekening_biaya.koderekening ASC',
-                'koderekeningDESC' => 'rekening_biaya.koderekening DESC',
-                'namaASC' => 'rekening_biaya.nama ASC',
-                'namaDESC' => 'rekening_biaya.nama DESC',
+                'namakpcASC' => 'kpc.nama ASC',
+                'namakpcDESC' => 'kpc.nama DESC',
+                'namakcuASC' => 'kprk.nama ASC',
+                'namakcuDESC' => 'kprk.nama DESC',
+                'triwulanASC' => 'verifikasi_biaya_rutin.triwulan ASC',
+                'triwulanDESC' => 'verifikasi_biaya_rutin.triwulan DESC',
+                'tahunASC' => 'verifikasi_biaya_rutin.tahun ASC',
+                'tahunDESC' => 'verifikasi_biaya_rutin.tahun DESC',
             ];
-            // dd($request->id_biaya_atribusi);
 
             // Set the order based on the mapping or use the default order if not found
             $order = $orderMappings[$getOrder] ?? $defaultOrder;
@@ -313,30 +319,152 @@ class BiayaAtribusiController extends Controller
                     'errors' => $validator->errors(),
                 ], 400);
             }
-            $atribusiQuery = BiayaAtribusiDetail::orderByRaw($order)
+            $rutinQuery = VerifikasiBiayaRutinDetail::orderByRaw($order)
+                ->select('verifikasi_biaya_rutin.id as id_verifikasi_biaya_rutin', 'verifikasi_biaya_rutin.triwulan', 'verifikasi_biaya_rutin.tahun', 'regional.nama as nama_regional', 'kprk.id as id_kcu', 'kprk.nama as nama_kcu', 'kpc.id as id_kpc', 'kpc.nama as nama_kpc', DB::raw('SUM(verifikasi_biaya_rutin_detail.pelaporan) as total_biaya'))
+                ->join('verifikasi_biaya_rutin', 'verifikasi_biaya_rutin_detail.id_verifikasi_biaya_rutin', '=', 'verifikasi_biaya_rutin.id')
+                ->join('regional', 'verifikasi_biaya_rutin.id_regional', '=', 'regional.id')
+                ->join('kprk', 'verifikasi_biaya_rutin.id_kprk', '=', 'kprk.id')
+                ->join('kpc', 'verifikasi_biaya_rutin.id_kpc', '=', 'kpc.id')
+                ->groupBy('kpc.id', 'kprk.id', 'verifikasi_biaya_rutin.id_regional', 'verifikasi_biaya_rutin.triwulan', 'verifikasi_biaya_rutin.tahun', 'regional.nama')
+                ->offset($offset)
+                ->limit($limit);
+
+            if ($search !== '') {
+                $rutinQuery->where('kpc.nama', 'like', "%$search%");
+            }
+            if ($id_kcu !== '') {
+                $rutinQuery->where('verifikasi_biaya_rutin.id_kprk', $id_kcu);
+            }
+            if ($tahun !== '') {
+                $rutinQuery->where('verifikasi_biaya_rutin.tahun', $tahun);
+            }
+
+            if ($triwulan !== '') {
+                $rutinQuery->where('verifikasi_biaya_rutin.triwulan', $triwulan);
+            }
+
+            if ($status !== '') {
+                // Anda perlu menyesuaikan kondisi WHERE ini sesuai dengan struktur tabel dan kondisi yang diinginkan.
+                // Misalnya: $rutinQuery->where('status', $status);
+            }
+            $rutin = $rutinQuery->get();
+
+            // Mengubah format total_biaya menjadi format Rupiah
+            foreach ($rutin as $item) {
+                $item->total_biaya = "Rp " . number_format($item->total_biaya, 2, ',', '.');
+
+                // Ambil VerifikasiBiayaRutin dengan kriteria tertentu
+                $getBiayaRutin = VerifikasiBiayaRutin::where('tahun', $item->tahun)
+                    ->where('id_kprk', $item->id_kprk)
+                    ->where('triwulan', $item->triwulan)
+                    ->get();
+
+                // Periksa apakah semua status dalam $getBiayaRutin adalah 9
+                $semuaStatusSembilan = $getBiayaRutin->every(function ($biayaRutin) {
+                    return $biayaRutin->id_status == 9;
+                });
+
+                // Jika semua status adalah 9, ambil status dari tabel Status
+                if ($semuaStatusSembilan) {
+                    $status = Status::where('id', 9)->first();
+                    $item->status = $status->nama;
+                } else {
+                    $status = Status::where('id', 7)->first();
+                    $item->status = $status->nama;
+                }
+            }
+
+            return response()->json([
+                'status' => 'SUCCESS',
+                'offset' => $offset,
+                'limit' => $limit,
+                'order' => $getOrder,
+                'search' => $search,
+                'data' => $rutin,
+            ]);
+        } catch (\Exception $e) {
+            return response()->json(['status' => 'ERROR', 'message' => $e->getMessage()], Response::HTTP_INTERNAL_SERVER_ERROR);
+        }
+    }
+
+    public function getPerKPC(Request $request)
+    {
+        try {
+            $offset = request()->get('offset', 0);
+            $limit = request()->get('limit', 100);
+            $getOrder = request()->get('order', '');
+            $id_verifikasi_biaya_rutin = request()->get('id_verifikasi_biaya_rutin', '');
+            $id_kcu = request()->get('id_kcu', '');
+            $id_kpc = request()->get('id_kpc', '');
+            $validator = Validator::make($request->all(), [
+                'id_verifikasi_biaya_rutin' => 'required|string|exists:verifikasi_biaya_rutin,id',
+                'id_kpc' => 'required|string|exists:kpc,id',
+                'id_kcu' => 'required|numeric|exists:kprk,id',
+            ]);
+            if ($validator->fails()) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => $validator->errors(),
+                    'error_code' => 'INPUT_VALIDATION_ERROR',
+                ], 422);
+            }
+            $defaultOrder = $getOrder ? $getOrder : "rekening_biaya.kode_rekening ASC";
+            $orderMappings = [
+                'koderekeningASC' => 'rekening_biaya.koderekening ASC',
+                'koderekeningDESC' => 'rekening_biaya.koderekening DESC',
+                'namaASC' => 'rekening_biaya.nama ASC',
+                'namaDESC' => 'rekening_biaya.nama DESC',
+            ];
+            // dd($request->id_verifikasi_biaya_rutin);
+
+            // Set the order based on the mapping or use the default order if not found
+            $order = $orderMappings[$getOrder] ?? $defaultOrder;
+            // Validation rules for input parameters
+            $validOrderValues = implode(',', array_keys($orderMappings));
+            $rules = [
+                'offset' => 'integer|min:0',
+                'limit' => 'integer|min:1',
+                'order' => "in:$validOrderValues",
+            ];
+
+            $validator = Validator::make([
+                'offset' => $offset,
+                'limit' => $limit,
+                'order' => $getOrder,
+            ], $rules);
+
+            if ($validator->fails()) {
+                return response()->json([
+                    'status' => 'ERROR',
+                    'message' => 'Invalid input parameters',
+                    'errors' => $validator->errors(),
+                ], 400);
+            }
+            $rutinQuery = VerifikasiBiayaRutinDetail::orderByRaw($order)
                 ->select(
                     'rekening_biaya.kode_rekening',
                     'rekening_biaya.nama as nama_rekening',
-                    'biaya_atribusi.triwulan',
-                    'biaya_atribusi.tahun_anggaran',
-                    'biaya_atribusi_detail.bulan',
+                    'verifikasi_biaya_rutin.triwulan',
+                    'verifikasi_biaya_rutin.tahun',
+                    'verifikasi_biaya_rutin_detail.bulan',
                 )
-                ->join('biaya_atribusi', 'biaya_atribusi_detail.id_biaya_atribusi', '=', 'biaya_atribusi.id')
-                ->join('rekening_biaya', 'biaya_atribusi_detail.id_rekening_biaya', '=', 'rekening_biaya.id')
-                ->where('biaya_atribusi_detail.id_biaya_atribusi', $request->id_biaya_atribusi)
-                ->where('biaya_atribusi.id_kprk', $request->id_kcu)
-                ->groupBy('rekening_biaya.kode_rekening', 'biaya_atribusi_detail.bulan')
+                ->join('verifikasi_biaya_rutin', 'verifikasi_biaya_rutin_detail.id_verifikasi_biaya_rutin', '=', 'verifikasi_biaya_rutin.id')
+                ->join('rekening_biaya', 'verifikasi_biaya_rutin_detail.id_rekening_biaya', '=', 'rekening_biaya.id')
+                ->where('verifikasi_biaya_rutin_detail.id_verifikasi_biaya_rutin', $request->id_verifikasi_biaya_rutin)
+                ->where('verifikasi_biaya_rutin.id_kprk', $request->id_kcu)
+                ->where('verifikasi_biaya_rutin.id_kpc', $request->id_kpc)
+                ->groupBy('rekening_biaya.kode_rekening', 'verifikasi_biaya_rutin_detail.bulan')
                 ->get();
 
-            $groupedAtribusi = [];
+            $groupedRutin = [];
             $laporanArray = [];
-            foreach ($atribusiQuery as $item) {
+            foreach ($rutinQuery as $item) {
                 $kodeRekening = $item->kode_rekening;
                 $triwulan = $item->triwulan;
 
-                // Jika kode_rekening belum ada dalam array groupedAtribusi, inisialisasikan dengan array kosong
-                if (!isset($groupedAtribusi[$kodeRekening])) {
-                    $groupedAtribusi[$kodeRekening] = [
+                // Jika kode_rekening belum ada dalam array groupedRutin, inisialisasikan dengan array kosong
+                if (!isset($groupedRutin[$kodeRekening])) {
+                    $groupedRutin[$kodeRekening] = [
                         'kode_rekening' => $kodeRekening,
                         'nama_rekening' => $item->nama_rekening,
                         'laporan' => $laporanArray, // Inisialisasi array laporan per kode rekening
@@ -360,11 +488,11 @@ class BiayaAtribusiController extends Controller
                     // Ubah format bulan dari angka menjadi nama bulan dalam bahasa Indonesia
                     $bulanString = $bulanIndonesia[$i - 1];
                     $bulan = $i;
-                    $getPelaporan = BiayaAtribusiDetail::select(DB::raw('SUM(pelaporan) as total_pelaporan'),
+                    $getPelaporan = VerifikasiBiayaRutinDetail::select(DB::raw('SUM(pelaporan) as total_pelaporan'),
                         DB::raw('SUM(verifikasi) as total_verifikasi'))
                         ->where('bulan', $bulan)
                         ->where('id_rekening_biaya', $kodeRekening)
-                        ->where('id_biaya_atribusi', $request->id_biaya_atribusi)
+                        ->where('id_verifikasi_biaya_rutin', $request->id_verifikasi_biaya_rutin)
                         ->get();
 
                     // Pastikan query menghasilkan data sebelum memprosesnya
@@ -385,17 +513,18 @@ class BiayaAtribusiController extends Controller
                     ];
                 }
 
-                // Tambahkan laporanArray ke dalam groupedAtribusi
-                $groupedAtribusi[$kodeRekening]['laporan'] = $laporanArray;
+                // Tambahkan laporanArray ke dalam groupedRutin
+                $groupedRutin[$kodeRekening]['laporan'] = $laporanArray;
             }
             return response()->json([
                 'status' => 'SUCCESS',
                 'offset' => $offset,
                 'limit' => $limit,
                 'order' => $order,
-                'id_biaya_atribusi' => $request->id_biaya_atribusi,
+                'id_verifikasi_biaya_rutin' => $request->id_verifikasi_biaya_rutin,
                 'id_kcu' => $request->id_kcu,
-                'data' => array_values($groupedAtribusi),
+                'id_kpc' => $request->id_kpc,
+                'data' => array_values($groupedRutin),
             ]);
 
         } catch (\Exception $e) {
@@ -405,20 +534,20 @@ class BiayaAtribusiController extends Controller
 
     public function getDetail(Request $request)
     {
-        // href="/backend/verifikasi_biaya_atribusi_detail/update?a=2270020231&b=5102050004&c=1&d=2023&e=01"
 
-        // href="/backend/verifikasi_biaya_atribusi_detail/update?a=2270020231&b=5102050004&c=1&d=2023&e=02"
         try {
 
-            $id_biaya_atribusi = request()->get('id_biaya_atribusi', '');
+            $id_verifikasi_biaya_rutin = request()->get('id_verifikasi_biaya_rutin', '');
             $kode_rekening = request()->get('kode_rekening', '');
             $bulan = request()->get('bulan', '');
             $id_kcu = request()->get('id_kcu', '');
+            $id_kpc = request()->get('id_kpc', '');
             $validator = Validator::make($request->all(), [
                 'bulan' => 'required|numeric|max:12',
                 'kode_rekening' => 'required|numeric|exists:rekening_biaya,id',
-                'id_biaya_atribusi' => 'required|numeric|exists:biaya_atribusi,id',
-                'id_kcu' => 'required|numeric|exists:kprk,id',
+                'id_verifikasi_biaya_rutin' => 'required|string|exists:verifikasi_biaya_rutin,id',
+                'id_kpc' => 'required|string|exists:kpc,id',
+                'id_kcu' => 'required|string|exists:kprk,id',
             ]);
 
             if ($validator->fails()) {
@@ -433,42 +562,40 @@ class BiayaAtribusiController extends Controller
                 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember',
             ];
 
-            $atribusi = BiayaAtribusiDetail::select(
-                'biaya_atribusi_detail.id as id_biaya_atribusi_detail',
+            $rutin = VerifikasiBiayaRutinDetail::select(
+                'verifikasi_biaya_rutin_detail.id as id_verifikasi_biaya_rutin_detail',
                 'rekening_biaya.kode_rekening',
                 'rekening_biaya.nama as nama_rekening',
-                'biaya_atribusi.tahun_anggaran',
+                'verifikasi_biaya_rutin.tahun',
                 DB::raw("CONCAT('" . $bulanIndonesia[$request->bulan - 1] . "') AS periode"),
-                'biaya_atribusi_detail.keterangan',
-                'biaya_atribusi_detail.lampiran',
-                'biaya_atribusi_detail.pelaporan',
-                'biaya_atribusi_detail.verifikasi',
-                'biaya_atribusi_detail.catatan_pemeriksa',
-                'kprk.nama as nama_kcu',
-                'kprk.jumlah_kpc_lpu',
-                'kprk.jumlah_kpc_lpk',
+                'verifikasi_biaya_rutin_detail.keterangan',
+                'verifikasi_biaya_rutin_detail.lampiran',
+                'verifikasi_biaya_rutin_detail.pelaporan',
+                'verifikasi_biaya_rutin_detail.verifikasi',
+                'verifikasi_biaya_rutin_detail.catatan_pemeriksa',
             )
 
-                ->where('biaya_atribusi_detail.id_biaya_atribusi', $request->id_biaya_atribusi)
-                ->where('biaya_atribusi_detail.id_rekening_biaya', $request->kode_rekening)
-                ->where('biaya_atribusi_detail.bulan', $request->bulan)
-                ->where('biaya_atribusi.id_kprk', $request->id_kcu)
-                ->join('biaya_atribusi', 'biaya_atribusi_detail.id_biaya_atribusi', '=', 'biaya_atribusi.id')
-                ->join('rekening_biaya', 'biaya_atribusi_detail.id_rekening_biaya', '=', 'rekening_biaya.id')
-                ->join('kprk', 'biaya_atribusi.id_kprk', '=', 'kprk.id')
+                ->where('verifikasi_biaya_rutin_detail.id_verifikasi_biaya_rutin', $request->id_verifikasi_biaya_rutin)
+                ->where('verifikasi_biaya_rutin_detail.id_rekening_biaya', $request->kode_rekening)
+                ->where('verifikasi_biaya_rutin_detail.bulan', $request->bulan)
+                ->where('verifikasi_biaya_rutin.id_kprk', $request->id_kcu)
+                ->where('verifikasi_biaya_rutin.id_kpc', $request->id_kpc)
+                ->join('verifikasi_biaya_rutin', 'verifikasi_biaya_rutin_detail.id_verifikasi_biaya_rutin', '=', 'verifikasi_biaya_rutin.id')
+                ->join('rekening_biaya', 'verifikasi_biaya_rutin_detail.id_rekening_biaya', '=', 'rekening_biaya.id')
+                ->join('kprk', 'verifikasi_biaya_rutin.id_kprk', '=', 'kprk.id')
                 ->get();
 
-            // dd($atribusi);
+            // dd($rutin);
 
             // Mengubah format total_biaya menjadi format Rupiah
-            foreach ($atribusi as $item) {
+            foreach ($rutin as $item) {
                 $item->pelaporan = "Rp " . number_format($item->pelaporan, 2, ',', '.');
                 $item->verifikasi = "Rp " . number_format($item->verifikasi, 2, ',', '.');
             }
 
             return response()->json([
                 'status' => 'SUCCESS',
-                'data' => $atribusi,
+                'data' => $rutin,
             ]);
         } catch (\Exception $e) {
             return response()->json(['status' => 'ERROR', 'message' => $e->getMessage()], Response::HTTP_INTERNAL_SERVER_ERROR);
@@ -479,7 +606,7 @@ class BiayaAtribusiController extends Controller
     {
         try {
             $validator = Validator::make($request->all(), [
-                'id_biaya_atribusi_detail' => 'required|numeric|exists:biaya_atribusi_detail,id',
+                'id_verifikasi_biaya_rutin_detail' => 'required|numeric|exists:verifikasi_biaya_rutin_detail,id',
                 'verifikasi' => 'required|string',
                 'catatan_pemeriksa' => 'required|string',
             ]);
@@ -488,33 +615,46 @@ class BiayaAtribusiController extends Controller
                 return response()->json(['status' => 'ERROR', 'message' => $validator->errors()], Response::HTTP_UNPROCESSABLE_ENTITY);
             }
 
-            $id_biaya_atribusi_detail = $request->id_biaya_atribusi_detail;
+            $id_verifikasi_biaya_rutin_detail = $request->id_verifikasi_biaya_rutin_detail;
             $verifikasi = $request->verifikasi;
-            $verifikasi = str_replace(['Rp.', '.', ',00'], '', $request->verifikasi);
-            $verifikasiInt = intval($verifikasi);
+
+            // Menghapus karakter "Rp." dan tanda "." dari string
+            $verifikasi = str_replace(['Rp.', '.'], '', $verifikasi);
+            // Mengganti tanda koma (",") dengan titik (".") untuk menyatakan bagian desimal
+            $verifikasi = str_replace(',', '.', $verifikasi);
+            // dd($verifikasi);
+
+            // Mengubah string menjadi float
+            $verifikasiFloat = (float) $verifikasi;
+
+            // Format ulang float menjadi string dengan 2 angka desimal
+            $verifikasiFormatted = number_format($verifikasiFloat, 2, '.', '');
+
+            // Output: "462972.00"
+
             $catatan_pemeriksa = $request->input('catatan_pemeriksa');
             $id_validator = Auth::user()->id;
             $tanggal_verifikasi = now();
 
-            $biaya_atribusi_detail = BiayaAtribusiDetail::find($id_biaya_atribusi_detail);
+            $verifikasi_biaya_rutin_detail = VerifikasiBiayaRutinDetail::find($id_verifikasi_biaya_rutin_detail);
 
-            $biaya_atribusi_detail->update([
-                'verifikasi' => $verifikasiInt,
+            $verifikasi_biaya_rutin_detail->update([
+                'verifikasi' => $verifikasiFormatted,
                 'catatan_pemeriksa' => $catatan_pemeriksa,
                 'id_validator' => $id_validator,
                 'tgl_verifikasi' => $tanggal_verifikasi,
             ]);
 
-            if ($biaya_atribusi_detail) {
-                $atribusi = BiayaAtribusiDetail::where('id_biaya_atribusi', $biaya_atribusi_detail->id_biaya_atribusi)->get();
-                $countValid = $atribusi->filter(function ($detail) {
+            if ($verifikasi_biaya_rutin_detail) {
+                $rutin = VerifikasiBiayaRutinDetail::where('id_verifikasi_biaya_rutin', $verifikasi_biaya_rutin_detail->id_verifikasi_biaya_rutin)->get();
+                $countValid = $rutin->filter(function ($detail) {
                     return $detail->verifikasi != 0.00 && $detail->tgl_verifikasi !== null;
                 })->count();
 
-                if ($countValid === $atribusi->count()) {
-                    BiayaAtribusi::where('id', $id_biaya_atribusi)->update(['id_status' => 9]);
+                if ($countValid === $rutin->count()) {
+                    VerifikasiBiayaRutin::where('id', $id_verifikasi_biaya_rutin)->update(['id_status' => 9]);
                 }
-                return response()->json(['status' => 'SUCCESS', 'data' => $biaya_atribusi_detail]);
+                return response()->json(['status' => 'SUCCESS', 'data' => $verifikasi_biaya_rutin_detail]);
             }
 
         } catch (\Exception $e) {

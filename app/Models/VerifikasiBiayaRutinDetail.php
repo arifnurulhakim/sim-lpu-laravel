@@ -2,33 +2,34 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
-class BiayaAtribusiDetail extends Model
+class VerifikasiBiayaRutinDetail extends Model
 {
-    protected $table = 'biaya_atribusi_detail'; // Sesuaikan dengan nama tabel Anda
+    protected $table = 'verifikasi_biaya_rutin_detail';
+    protected $primaryKey = 'id'; // Sesuaikan dengan nama primary key pada tabel
     public $timestamps = false;
-    use HasFactory;
+    // Attribut yang dapat diisi
     protected $fillable = [
         'id',
-        'id_biaya_atribusi',
+        'id_verifikasi_biaya_rutin',
         'id_rekening_biaya',
         'bulan',
         'pelaporan',
+        'pelaporan_prognosa',
         'verifikasi',
+        'kategori_biaya',
         'keterangan',
-        'catatan_pemeriksa',
+        'keterangan_prognosa',
         'lampiran',
+        'catatan_pemeriksa',
         'id_verifikator',
         'tgl_verifikasi',
     ];
 
-    // Jika Anda memiliki relasi dengan model lain, Anda dapat mendefinisikannya di sini
-    // Contoh:
-    public function biayaAtribusi()
+    public function biayaRutin()
     {
-        return $this->belongsTo(BiayaAtribusi::class, 'id_biaya_atribusi');
+        return $this->belongsTo(VerifikasiBiayaRutin::class, 'id_verifikasi_biaya_rutin');
     }
 
     public function rekeningBiaya()
@@ -40,5 +41,4 @@ class BiayaAtribusiDetail extends Model
     {
         return $this->belongsTo(User::class, 'id_verifikator');
     }
-
 }

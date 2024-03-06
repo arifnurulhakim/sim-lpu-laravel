@@ -21,6 +21,7 @@ use App\Http\Controllers\RekeningProduksiController;
 use App\Http\Controllers\ResetPasswordController;
 use App\Http\Controllers\SyncApiController;
 use App\Http\Controllers\UserController;
+use App\Http\Controllers\VerifikasiBiayaRutinController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -144,6 +145,13 @@ Route::middleware('auth:api')->group(function () {
         Route::get('atribusi-kcu', [BiayaAtribusiController::class, 'getPerKCU'])->name('atribusi-kcu');
         Route::get('atribusi-detail', [BiayaAtribusiController::class, 'getDetail'])->name('atribusi-detail');
         Route::post('atribusi-verifikasi', [BiayaAtribusiController::class, 'verifikasi'])->name('atribusi-verifikasi');
+
+        Route::get('rutin-tahun', [VerifikasiBiayaRutinController::class, 'getPerTahun'])->name('rutin-tahun');
+        Route::get('rutin-regional', [VerifikasiBiayaRutinController::class, 'getPerRegional'])->name('rutin-regional');
+        Route::get('rutin-kcu', [VerifikasiBiayaRutinController::class, 'getPerKCU'])->name('rutin-kcu');
+        Route::get('rutin-kpc', [VerifikasiBiayaRutinController::class, 'getPerKPC'])->name('rutin-kpc');
+        Route::get('rutin-detail', [VerifikasiBiayaRutinController::class, 'getDetail'])->name('rutin-detail');
+        Route::post('rutin-verifikasi', [VerifikasiBiayaRutinController::class, 'verifikasi'])->name('rutin-verifikasi');
 
     });
 });
