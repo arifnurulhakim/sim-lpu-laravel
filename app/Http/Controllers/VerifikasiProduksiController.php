@@ -303,7 +303,6 @@ class VerifikasiProduksiController extends Controller
             $search = request()->get('search', '');
             $getOrder = request()->get('order', '');
             $id_kcu = request()->get('id_kcu', '');
-            dd($id_kcu);
             $tahun_anggaran = request()->get('tahun_anggaran', '');
             $triwulan = request()->get('triwulan', '');
             $status = request()->get('status', '');
