@@ -2,6 +2,9 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Kpc;
+use App\Models\Kprk;
+use App\Models\Regional;
 use App\Models\Status;
 use App\Models\VerifikasiProduksi;
 use App\Models\VerifikasiProduksiDetail;
@@ -285,6 +288,7 @@ class VerifikasiProduksiController extends Controller
     public function getPerKCU(Request $request)
     {
         try {
+
             $validator = Validator::make($request->all(), [
                 'tahun_anggaran' => 'nullable|numeric',
                 'triwulan' => 'nullable|numeric|in:1,2,3,4',
@@ -305,8 +309,12 @@ class VerifikasiProduksiController extends Controller
             $id_kcu = request()->get('id_kcu', '');
             $tahun_anggaran = request()->get('tahun_anggaran', '');
             $triwulan = request()->get('triwulan', '');
-            $status = request()->get('status', '');
-            $defaultOrder = $getOrder ? $getOrder : "kpc.id ASC";
+
+            // dd($triwulan);
+            $status = request()->get('status', '1');
+            // dd($status);
+            $defaultOrder = $getOrder ? $getOrder : "produksi.id ASC";
+            // dd($defaultOrder);
             $orderMappings = [
                 'namakpcASC' => 'kpc.nama ASC',
                 'namakpcDESC' => 'kpc.nama DESC',
@@ -320,6 +328,7 @@ class VerifikasiProduksiController extends Controller
 
             // Set the order based on the mapping or use the default order if not found
             $order = $orderMappings[$getOrder] ?? $defaultOrder;
+
             // Validation rules for input parameters
             $validOrderValues = implode(',', array_keys($orderMappings));
             $rules = [
@@ -327,6 +336,7 @@ class VerifikasiProduksiController extends Controller
                 'limit' => 'integer|min:1',
                 'order' => "in:$validOrderValues",
             ];
+            // dd($rules);
 
             $validator = Validator::make([
                 'offset' => $offset,
@@ -342,15 +352,11 @@ class VerifikasiProduksiController extends Controller
                 ], 400);
             }
             $produksiQuery = VerifikasiProduksiDetail::orderByRaw($order)
-                ->select('produksi.id as id_produksi', 'produksi.triwulan', 'produksi.tahun_anggaran', 'regional.nama as nama_regional', 'kprk.id as id_kcu', 'kprk.nama as nama_kcu', 'kpc.id as id_kpc', 'kpc.nama as nama_kpc', DB::raw('SUM(produksi_detail.pelaporan) as total_produksi'))
+                ->select('produksi.id as produksi_id', 'produksi.triwulan', 'produksi.tahun_anggaran', 'produksi.id_regional', 'produksi.id_kprk as id_kcu', 'produksi.id_kpc as id_kpc', DB::raw('SUM(produksi_detail.pelaporan) as total_produksi'))
                 ->join('produksi', 'produksi_detail.id_produksi', '=', 'produksi.id')
-                ->join('regional', 'produksi.id_regional', '=', 'regional.id')
-                ->join('kprk', 'produksi.id_kprk', '=', 'kprk.id')
-                ->join('kpc', 'produksi.id_kpc', '=', 'kpc.id')
-                ->groupBy('kpc.id', 'kprk.id', 'produksi.id_regional', 'produksi.triwulan', 'produksi.tahun_anggaran', 'regional.nama')
+                ->groupBy('produksi.id_kpc', 'produksi.triwulan', 'produksi.tahun_anggaran')
                 ->offset($offset)
                 ->limit($limit);
-
             if ($search !== '') {
                 $produksiQuery->where('kpc.nama', 'like', "%$search%");
             }
@@ -371,30 +377,15 @@ class VerifikasiProduksiController extends Controller
             }
             $produksi = $produksiQuery->get();
             // dd($produksi);
-
             // Mengubah format total_produksi menjadi format Rupiah
             foreach ($produksi as $item) {
                 $item->total_produksi = "Rp " . number_format($item->total_produksi, 2, ',', '.');
-
-                // AmbilVerifikasiProduksi dengan kriteria tertentu
-                $getProduksi = VerifikasiProduksi::where('tahun_anggaran', $item->tahun_anggaran)
-                    ->where('id_kprk', $item->id_kprk)
-                    ->where('triwulan', $item->triwulan)
-                    ->get();
-
-                // Periksa apakah semua status dalam $getProduksi adalah 9
-                $semuaStatusSembilan = $getProduksi->every(function ($produksi) {
-                    return $produksi->id_status == 9;
-                });
-
-                // Jika semua status adalah 9, ambil status dari tabel Status
-                if ($semuaStatusSembilan) {
-                    $status = Status::where('id', 9)->first();
-                    $item->status = $status->nama;
-                } else {
-                    $status = Status::where('id', 7)->first();
-                    $item->status = $status->nama;
-                }
+                $regional = Regional::find($item->id_regional);
+                $item->nama_regional = $regional ? $regional->nama : '';
+                $kprk = Kprk::find($item->id_kcu);
+                $item->nama_kcu = $kprk ? $kprk->nama : '';
+                $kpc = Kpc::find($item->id_kpc);
+                $item->nama_kpc = $kpc ? $kpc->nama : '';
             }
 
             return response()->json([
@@ -431,12 +422,12 @@ class VerifikasiProduksiController extends Controller
                     'error_code' => 'INPUT_VALIDATION_ERROR',
                 ], 422);
             }
-            $defaultOrder = $getOrder ? $getOrder : "rekening_biaya.kode_rekening ASC";
+            $defaultOrder = $getOrder ? $getOrder : "produksi_detail.kategori_produksi ASC";
             $orderMappings = [
-                'koderekeningASC' => 'rekening_biaya.koderekening ASC',
-                'koderekeningDESC' => 'rekening_biaya.koderekening DESC',
-                'namaASC' => 'rekening_biaya.nama ASC',
-                'namaDESC' => 'rekening_biaya.nama DESC',
+                'kodeproduksiASC' => 'rekening_produksi.kodeproduksi ASC',
+                'kodeproduksiDESC' => 'rekening_produksi.kodeproduksi DESC',
+                'namaASC' => 'rekening_produksi.nama ASC',
+                'namaDESC' => 'rekening_produksi.nama DESC',
             ];
             // dd($request->id_produksi);
 
@@ -465,20 +456,35 @@ class VerifikasiProduksiController extends Controller
             }
             $produksiQuery = VerifikasiProduksiDetail::orderByRaw($order)
                 ->select(
-                    // 'produksi.id as id_produksi',
-                    'rekening_biaya.kode_rekening',
-                    'rekening_biaya.nama as nama_rekening',
+                    'produksi.id as id_produksi',
+                    'produksi_detail.id as id_produksi_detail',
+                    'rekening_produksi.kode_rekening',
+                    'rekening_produksi.nama as nama_rekening',
                     'produksi.triwulan',
                     'produksi.tahun_anggaran',
-                    'produksi_detail.bulan',
+                    'produksi_detail.nama_bulan',
+                    'produksi_detail.kategori_produksi',
+                    'produksi_detail.jenis_produksi',
+                    'produksi_detail.keterangan',
                 )
                 ->join('produksi', 'produksi_detail.id_produksi', '=', 'produksi.id')
-                ->join('rekening_biaya', 'produksi_detail.id_rekening_biaya', '=', 'rekening_biaya.id')
+                ->join('rekening_produksi', 'produksi_detail.kode_rekening', '=', 'rekening_produksi.kode_rekening')
                 ->where('produksi_detail.id_produksi', $request->id_produksi)
-                ->where('produksi.id_kprk', $request->id_kcu)
-                ->where('produksi.id_kpc', $request->id_kpc)
-                ->groupBy('rekening_biaya.kode_rekening', 'produksi_detail.bulan')
+            // ->where('produksi.id_kprk', $request->id_kcu)
+            // ->where('produksi.id_kpc', $request->id_kpc)
+                ->groupBy('rekening_produksi.kode_rekening', 'produksi_detail.nama_bulan')
                 ->get();
+            // $produksiQuery = VerifikasiProduksiDetail::orderByRaw($order)
+            //     ->select('*')
+
+            //     ->join('produksi', 'produksi_detail.id_produksi', '=', 'produksi.id')
+            // // ->join('rekening_produksi', 'produksi_detail.kode_rekening', '=', 'rekening_produksi.id')
+            //     ->where('produksi.id', $request->id_produksi)
+            // // ->where('produksi.id_kprk', $request->id_kcu)
+            // // ->where('produksi.id_kpc', $request->id_kpc)
+            //     ->groupBy('produksi_detail.nama_bulan')
+            //     ->get();
+            // dd($produksiQuery);
 
             $groupedRutin = [];
             $laporanArray = [];
@@ -492,6 +498,9 @@ class VerifikasiProduksiController extends Controller
                         // 'id_produksi' => $item->id_produksi,
                         'kode_rekening' => $kodeRekening,
                         'nama_rekening' => $item->nama_rekening,
+                        'jenis_layanan' => $item->kategori_produksi,
+                        'aktifitas' => $item->jenis_produksi,
+                        'produk' => $item->keterangan,
                         'laporan' => $laporanArray, // Inisialisasi array laporan per kode rekening
                     ];
                 }
@@ -514,12 +523,16 @@ class VerifikasiProduksiController extends Controller
                     $bulanString = $bulanIndonesia[$i - 1];
                     $bulan = $i;
                     $getPelaporan = VerifikasiProduksiDetail::select(DB::raw('SUM(pelaporan) as total_pelaporan'),
-                        DB::raw('SUM(verifikasi) as total_verifikasi'))
-                        ->where('bulan', $bulan)
-                        ->where('id_rekening_biaya', $kodeRekening)
+                        DB::raw('SUM(verifikasi) as total_verifikasi'), 'id as id_produksi_detail')
+                        ->where('nama_bulan', $bulan)
+                        ->where('kode_rekening', $kodeRekening)
+                        ->where('keterangan', $item->keterangan)
                         ->where('id_produksi', $request->id_produksi)
                         ->get();
-
+                    $id_produksi_detail = '';
+                    foreach ($getPelaporan as $id_pelaporan) {
+                        $id_produksi_detail = $id_pelaporan->id_produksi_detail;
+                    }
                     // Pastikan query menghasilkan data sebelum memprosesnya
                     if ($getPelaporan->isNotEmpty()) {
                         $pelaporan = 'Rp. ' . number_format($getPelaporan[0]->total_pelaporan, 2, ',', '.');
@@ -531,6 +544,7 @@ class VerifikasiProduksiController extends Controller
 
                     // Tambahkan data ke dalam array laporan
                     $laporanArray[] = [
+                        'id_produksi_detail' => $id_produksi_detail,
                         'bulan_string' => $bulanString,
                         'bulan' => $bulan,
                         'pelaporan' => $pelaporan,
@@ -581,7 +595,8 @@ class VerifikasiProduksiController extends Controller
                 ->where('id_kprk', $request->id_kcu)
                 ->where('id_kpc', $request->id_kpc)->first();
             $produksi->update([
-                'id_status' => 10,
+                'status_regional' => 10,
+                'status_kprk' => 10,
             ]);
 
             return response()->json(['status' => 'SUCCESS', 'data' => $produksi]);
@@ -596,17 +611,19 @@ class VerifikasiProduksiController extends Controller
 
         try {
 
+            $id_produksi_detail = request()->get('id_produksi_detail', '');
             $id_produksi = request()->get('id_produksi', '');
             $kode_rekening = request()->get('kode_rekening', '');
             $bulan = request()->get('bulan', '');
             $id_kcu = request()->get('id_kcu', '');
             $id_kpc = request()->get('id_kpc', '');
             $validator = Validator::make($request->all(), [
-                'bulan' => 'required|numeric|max:12',
-                'kode_rekening' => 'required|numeric|exists:rekening_biaya,id',
-                'id_produksi' => 'required|string|exists:produksi,id',
-                'id_kpc' => 'required|string|exists:kpc,id',
-                'id_kcu' => 'required|string|exists:kprk,id',
+                'id_produksi_detail' => 'required|string|exists:produksi_detail,id',
+                // 'bulan' => 'required|numeric|max:12',
+                // 'kode_rekening' => 'required|numeric|exists:rekening_produksi,kode_rekening',
+                // 'id_produksi' => 'required|string|exists:produksi,id',
+                // 'id_kpc' => 'required|string|exists:kpc,id',
+                // 'id_kcu' => 'required|string|exists:kprk,id',
             ]);
 
             if ($validator->fails()) {
@@ -623,33 +640,33 @@ class VerifikasiProduksiController extends Controller
 
             $produksi = VerifikasiProduksiDetail::select(
                 'produksi_detail.id as id_produksi_detail',
-                'rekening_biaya.kode_rekening',
-                'rekening_biaya.nama as nama_rekening',
+                'rekening_produksi.kode_rekening',
+                'rekening_produksi.nama as nama_rekening',
                 'produksi.tahun_anggaran',
-                DB::raw("CONCAT('" . $bulanIndonesia[$request->bulan - 1] . "') AS periode"),
+                'produksi_detail.nama_bulan',
                 'produksi_detail.keterangan',
                 'produksi_detail.lampiran',
                 'produksi_detail.pelaporan',
                 'produksi_detail.verifikasi',
                 'produksi_detail.catatan_pemeriksa',
+                // DB::raw("CONCAT('" . $bulanIndonesia['produksi_detail.nama_bulan'-1] . "') AS periode")
             )
-
-                ->where('produksi_detail.id_produksi', $request->id_produksi)
-                ->where('produksi_detail.id_rekening_biaya', $request->kode_rekening)
-                ->where('produksi_detail.bulan', $request->bulan)
-                ->where('produksi.id_kprk', $request->id_kcu)
-                ->where('produksi.id_kpc', $request->id_kpc)
+                ->where('produksi_detail.id', $request->id_produksi_detail)
+            // Aktifkan filter yang telah Anda komentari
+            // ->where('produksi_detail.id_produksi', $request->id_produksi)
+            // ->where('produksi_detail.kode_rekening', $request->kode_rekening)
+            // ->where('produksi_detail.nama_bulan', $request->bulan)
+            // ->where('produksi.id_kprk', $request->id_kcu)
+            // ->where('produksi.id_kpc', $request->id_kpc)
                 ->join('produksi', 'produksi_detail.id_produksi', '=', 'produksi.id')
-                ->join('rekening_biaya', 'produksi_detail.id_rekening_biaya', '=', 'rekening_biaya.id')
+                ->join('rekening_produksi', 'produksi_detail.kode_rekening', '=', 'rekening_produksi.kode_rekening')
                 ->join('kprk', 'produksi.id_kprk', '=', 'kprk.id')
-                ->get();
+                ->first();
 
-            // dd($produksi);
-
-            // Mengubah format total_produksi menjadi format Rupiah
-            foreach ($produksi as $item) {
-                $item->pelaporan = "Rp " . number_format($item->pelaporan, 2, ',', '.');
-                $item->verifikasi = "Rp " . number_format($item->verifikasi, 2, ',', '.');
+            if ($produksi) {
+                $produksi->periode = $bulanIndonesia[$produksi->nama_bulan - 1];
+                $produksi->pelaporan = "Rp " . number_format($produksi->pelaporan, 2, ',', '.');
+                $produksi->verifikasi = "Rp " . number_format($produksi->verifikasi, 2, ',', '.');
             }
 
             return response()->json([
@@ -665,7 +682,7 @@ class VerifikasiProduksiController extends Controller
     {
         try {
             $validator = Validator::make($request->all(), [
-                'id_produksi_detail' => 'required|numeric|exists:produksi_detail,id',
+                'id_produksi_detail' => 'required|string|exists:produksi_detail,id',
                 'verifikasi' => 'required|string',
                 'catatan_pemeriksa' => 'required|string',
             ]);
