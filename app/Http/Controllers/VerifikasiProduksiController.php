@@ -3,22 +3,22 @@
 namespace App\Http\Controllers;
 
 use App\Models\Status;
-use App\Models\VerifikasiBiayaRutin;
-use App\Models\VerifikasiBiayaRutinDetail;
+use App\Models\VerifikasiProduksi;
+use App\Models\VerifikasiProduksiDetail;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 use Symfony\Component\HttpFoundation\Response;
 
-class VerifikasiBiayaRutinController extends Controller
+class VerifikasiProduksiController extends Controller
 {
     public function getPerTahun(Request $request)
     {
         try {
 
             $validator = Validator::make($request->all(), [
-                'tahun' => 'nullable|numeric', // Menyatakan bahwa tahun bersifat opsional dan harus berupa angka
+                'tahun_anggaran' => 'nullable|numeric', // Menyatakan bahwa tahun_anggaran bersifat opsional dan harus berupa angka
                 'triwulan' => 'nullable|numeric|in:1,2,3,4', // Menyatakan bahwa triwulan bersifat opsional, harus berupa angka, dan nilainya hanya boleh 1, 2, 3, atau 4
                 'status' => 'nullable|string|in:7,9', // Menyatakan bahwa status bersifat opsional, harus berupa string, dan nilainya hanya boleh "aktif" atau "nonaktif"
             ]);
@@ -34,18 +34,18 @@ class VerifikasiBiayaRutinController extends Controller
             $limit = request()->get('limit', 100);
             $search = request()->get('search', '');
             $getOrder = request()->get('order', '');
-            $tahun = request()->get('tahun', '');
+            $tahun_anggaran = request()->get('tahun_anggaran', '');
             $triwulan = request()->get('triwulan', '');
             $status = request()->get('status', '');
 
-            $defaultOrder = $getOrder ? $getOrder : "nama ASC";
+            $defaultOrder = $getOrder ? $getOrder : "regional.nama ASC";
             $orderMappings = [
                 'namaASC' => 'regional.nama ASC',
                 'namaDESC' => 'regional.nama DESC',
-                'triwulanASC' => 'verifikasi_biaya_rutin.triwulan ASC',
-                'triwulanDESC' => 'verifikasi_biaya_rutin.triwulan DESC',
-                'tahunASC' => 'verifikasi_biaya_rutin.tahun ASC',
-                'tahunDESC' => 'verifikasi_biaya_rutin.tahun DESC',
+                'triwulanASC' => 'produksi.triwulan ASC',
+                'triwulanDESC' => 'produksi.triwulan DESC',
+                'tahunASC' => 'produksi.tahun_anggaran ASC',
+                'tahunDESC' => 'produksi.tahun_anggaran DESC',
             ];
 
             // Set the order based on the mapping or use the default order if not found
@@ -72,46 +72,68 @@ class VerifikasiBiayaRutinController extends Controller
                 ], 400);
             }
 
-            $rutinQuery = VerifikasiBiayaRutin::orderByRaw($order)
-                ->select('verifikasi_biaya_rutin.id_regional', 'verifikasi_biaya_rutin.triwulan', 'verifikasi_biaya_rutin.tahun', 'regional.nama as nama_regional', DB::raw('SUM(verifikasi_biaya_rutin.total_biaya) as total_biaya'))
-                ->join('regional', 'verifikasi_biaya_rutin.id_regional', '=', 'regional.id')
-                ->groupBy('verifikasi_biaya_rutin.id_regional', 'verifikasi_biaya_rutin.triwulan', 'verifikasi_biaya_rutin.tahun')
+            $produksiQuery = VerifikasiProduksi::orderByRaw($order)
+                ->select(
+                    'produksi.id_regional',
+                    'produksi.triwulan',
+                    'produksi.tahun_anggaran',
+                    'regional.nama as nama_regional',
+                    DB::raw('SUM(produksi.total_lpu) as total_lpu'),
+                    DB::raw('SUM(produksi.total_lpu_prognosa) as total_lpu_prognosa'),
+                    DB::raw('SUM(produksi.total_lpk) as total_lpk'),
+                    DB::raw('SUM(produksi.total_lpk_prognosa) as total_lpk_prognosa'),
+                    DB::raw('SUM(produksi.total_lbf) as total_lbf'),
+                    DB::raw('SUM(produksi.total_lbf_prognosa) as total_lbf_prognosa')
+                )
+                ->join('regional', 'produksi.id_regional', '=', 'regional.id')
+            // ->join('produksi_detail', 'produksi.id', '=', 'produksi_detail.id_produksi')
+                ->groupBy('produksi.id_regional', 'produksi.triwulan', 'produksi.tahun_anggaran')
                 ->offset($offset)
                 ->limit($limit);
+            // $produksiQuery = VerifikasiProduksiDetail::orderByRaw($order)
+            //     ->select('produksi.id_regional',
+            //         'produksi.triwulan',
+            //         'produksi.tahun_anggaran',
+            //         'regional.nama as nama_regional', DB::raw('SUM(produksi_detail.verifikasi) as total_produksi'))
+            //     ->join('produksi', 'produksi_detail.id_produksi', '=', 'produksi.id')
+            //     ->join('kprk', 'produksi.id_kprk', '=', 'kprk.id')
+            //     ->join('regional', 'produksi.id_regional', '=', 'regional.id')
+            //     ->groupBy('kprk.id', 'produksi.id_regional', 'produksi.triwulan', 'produksi.tahun_anggaran', 'regional.nama')
+            //     ->offset($offset)
+            //     ->limit($limit);
 
             if ($search !== '') {
-                $rutinQuery->where('nama_regional', 'like', "%$search%");
+                $produksiQuery->where('nama_regional', 'like', "%$search%");
             }
-
-            // Menambahkan kondisi WHERE berdasarkan variabel $tahun, $triwulan, dan $status
-            if ($tahun !== '') {
-                $rutinQuery->where('verifikasi_biaya_rutin.tahun', $tahun);
+            // Menambahkan kondisi WHERE berdasarkan variabel $tahun_anggaran, $triwulan, dan $status
+            if ($tahun_anggaran !== '') {
+                $produksiQuery->where('produksi.tahun_anggaran', $tahun_anggaran);
             }
-
             if ($triwulan !== '') {
-                $rutinQuery->where('verifikasi_biaya_rutin.triwulan', $triwulan);
+                $produksiQuery->where('produksi.triwulan', $triwulan);
             }
             if ($status !== '') {
-                $rutinQuery->where('verifikasi_biaya_rutin.id_status', $status);
+                $produksiQuery->where('produksi.id_status', $status);
             }
 
-            $rutin = $rutinQuery->get();
-
-            $grand_total = $rutin->sum('total_biaya');
+            $produksi = $produksiQuery->get();
+            // dd($produksi);
+            $grand_total = $produksi->sum('total_lpu') + $produksi->sum('total_lpk') + $produksi->sum('total_lbf');
             $grand_total = "Rp " . number_format($grand_total, 2, ',', '.');
-            // Mengubah format total_biaya menjadi format Rupiah
-            foreach ($rutin as $item) {
-                $item->total_biaya = "Rp " . number_format($item->total_biaya, 2, ',', '.');
 
-                // Ambil VerifikasiBiayaRutin dengan kriteria tertentu
-                $getBiayaRutin = VerifikasiBiayaRutin::where('tahun', $item->tahun)
+            // Mengubah format total_produksi menjadi format Rupiah
+            foreach ($produksi as $item) {
+                $item->total_produksi = "Rp " . number_format($item->total_lpu + $item->total_lpk + $item->total_lbf, 2, ',', '.');
+
+                // AmbilVerifikasiProduksi dengan kriteria tertentu
+                $getProduksi = VerifikasiProduksi::where('tahun_anggaran', $item->tahun_anggaran)
                     ->where('id_regional', $item->id_regional)
                     ->where('triwulan', $item->triwulan)
                     ->get();
 
-                // Periksa apakah semua status dalam $getBiayaRutin adalah 9
-                $semuaStatusSembilan = $getBiayaRutin->every(function ($biayaRutin) {
-                    return $biayaRutin->id_status == 9;
+                // Periksa apakah semua status dalam $getProduksi adalah 9
+                $semuaStatusSembilan = $getProduksi->every(function ($produksi) {
+                    return $produksi->id_status == 9;
                 });
 
                 // Jika semua status adalah 9, ambil status dari tabel Status
@@ -131,7 +153,7 @@ class VerifikasiBiayaRutinController extends Controller
                 'order' => $getOrder,
                 'search' => $search,
                 'grand_total' => $grand_total,
-                'data' => $rutin,
+                'data' => $produksi,
             ]);
         } catch (\Exception $e) {
             return response()->json(['status' => 'ERROR', 'message' => $e->getMessage()], Response::HTTP_INTERNAL_SERVER_ERROR);
@@ -141,7 +163,7 @@ class VerifikasiBiayaRutinController extends Controller
     {
         try {
             $validator = Validator::make($request->all(), [
-                'tahun' => 'nullable|numeric',
+                'tahun_anggaran' => 'nullable|numeric',
                 'triwulan' => 'nullable|numeric|in:1,2,3,4',
                 'id_regional' => 'nullable|numeric|exists:regional,id',
                 'status' => 'nullable|string|in:7,9',
@@ -158,17 +180,17 @@ class VerifikasiBiayaRutinController extends Controller
             $search = request()->get('search', '');
             $getOrder = request()->get('order', '');
             $id_regional = request()->get('id_regional', '');
-            $tahun = request()->get('tahun', '');
+            $tahun_anggaran = request()->get('tahun_anggaran', '');
             $triwulan = request()->get('triwulan', '');
             $status = request()->get('status', '');
             $defaultOrder = $getOrder ? $getOrder : "kprk.id ASC";
             $orderMappings = [
                 'namaASC' => 'kprk.nama ASC',
                 'namaDESC' => 'kprk.nama DESC',
-                'triwulanASC' => 'verifikasi_biaya_rutin.triwulan ASC',
-                'triwulanDESC' => 'verifikasi_biaya_rutin.triwulan DESC',
-                'tahunASC' => 'verifikasi_biaya_rutin.tahun ASC',
-                'tahunDESC' => 'verifikasi_biaya_rutin.tahun DESC',
+                'triwulanASC' => 'produksi.triwulan ASC',
+                'triwulanDESC' => 'produksi.triwulan DESC',
+                'tahunASC' => 'produksi.tahun_anggaran ASC',
+                'tahunDESC' => 'produksi.tahun_anggaran DESC',
             ];
 
             // Set the order based on the mapping or use the default order if not found
@@ -194,48 +216,48 @@ class VerifikasiBiayaRutinController extends Controller
                     'errors' => $validator->errors(),
                 ], 400);
             }
-            $rutinQuery = VerifikasiBiayaRutinDetail::orderByRaw($order)
-                ->select('verifikasi_biaya_rutin.id', 'verifikasi_biaya_rutin.triwulan', 'verifikasi_biaya_rutin.tahun', 'regional.nama as nama_regional', 'kprk.id as id_kcu', 'kprk.nama as nama_kcu', DB::raw('SUM(verifikasi_biaya_rutin_detail.pelaporan) as total_biaya'))
-                ->join('verifikasi_biaya_rutin', 'verifikasi_biaya_rutin_detail.id_verifikasi_biaya_rutin', '=', 'verifikasi_biaya_rutin.id')
-                ->join('kprk', 'verifikasi_biaya_rutin.id_kprk', '=', 'kprk.id')
-                ->join('regional', 'verifikasi_biaya_rutin.id_regional', '=', 'regional.id')
-                ->groupBy('kprk.id', 'verifikasi_biaya_rutin.id_regional', 'verifikasi_biaya_rutin.triwulan', 'verifikasi_biaya_rutin.tahun', 'regional.nama')
+            $produksiQuery = VerifikasiProduksiDetail::orderByRaw($order)
+                ->select('produksi.id', 'produksi.triwulan', 'produksi.tahun_anggaran', 'regional.nama as nama_regional', 'kprk.id as id_kcu', 'kprk.nama as nama_kcu', DB::raw('SUM(produksi_detail.pelaporan) as total_produksi'))
+                ->join('produksi', 'produksi_detail.id_produksi', '=', 'produksi.id')
+                ->join('kprk', 'produksi.id_kprk', '=', 'kprk.id')
+                ->join('regional', 'produksi.id_regional', '=', 'regional.id')
+                ->groupBy('kprk.id', 'produksi.id_regional', 'produksi.triwulan', 'produksi.tahun_anggaran', 'regional.nama')
                 ->offset($offset)
                 ->limit($limit);
 
             if ($search !== '') {
-                $rutinQuery->where('kprk.nama', 'like', "%$search%");
+                $produksiQuery->where('kprk.nama', 'like', "%$search%");
             }
             if ($id_regional !== '') {
-                $rutinQuery->where('verifikasi_biaya_rutin.id_regional', $id_regional);
+                $produksiQuery->where('produksi.id_regional', $id_regional);
             }
-            if ($tahun !== '') {
-                $rutinQuery->where('verifikasi_biaya_rutin.tahun', $tahun);
+            if ($tahun_anggaran !== '') {
+                $produksiQuery->where('produksi.tahun_anggaran', $tahun_anggaran);
             }
 
             if ($triwulan !== '') {
-                $rutinQuery->where('verifikasi_biaya_rutin.triwulan', $triwulan);
+                $produksiQuery->where('produksi.triwulan', $triwulan);
             }
 
             if ($status !== '') {
-                $rutinQuery->where('verifikasi_biaya_rutin.id_status', $status);
+                $produksiQuery->where('produksi.id_status', $status);
             }
 
-            $rutin = $rutinQuery->get();
+            $produksi = $produksiQuery->get();
 
-            // Mengubah format total_biaya menjadi format Rupiah
-            foreach ($rutin as $item) {
-                $item->total_biaya = "Rp " . number_format($item->total_biaya, 2, ',', '.');
+            // Mengubah format total_produksi menjadi format Rupiah
+            foreach ($produksi as $item) {
+                $item->total_produksi = "Rp " . number_format($item->total_produksi, 2, ',', '.');
 
-                // Ambil VerifikasiBiayaRutin dengan kriteria tertentu
-                $getBiayaRutin = VerifikasiBiayaRutin::where('tahun', $item->tahun)
+                // AmbilVerifikasiProduksi dengan kriteria tertentu
+                $getProduksi = VerifikasiProduksi::where('tahun_anggaran', $item->tahun_anggaran)
                     ->where('id_regional', $item->id_regional)
                     ->where('triwulan', $item->triwulan)
                     ->get();
 
-                // Periksa apakah semua status dalam $getBiayaRutin adalah 9
-                $semuaStatusSembilan = $getBiayaRutin->every(function ($biayaRutin) {
-                    return $biayaRutin->id_status == 9;
+                // Periksa apakah semua status dalam $getProduksi adalah 9
+                $semuaStatusSembilan = $getProduksi->every(function ($produksi) {
+                    return $produksi->id_status == 9;
                 });
 
                 // Jika semua status adalah 9, ambil status dari tabel Status
@@ -254,7 +276,7 @@ class VerifikasiBiayaRutinController extends Controller
                 'limit' => $limit,
                 'order' => $getOrder,
                 'search' => $search,
-                'data' => $rutin,
+                'data' => $produksi,
             ]);
         } catch (\Exception $e) {
             return response()->json(['status' => 'ERROR', 'message' => $e->getMessage()], Response::HTTP_INTERNAL_SERVER_ERROR);
@@ -264,7 +286,7 @@ class VerifikasiBiayaRutinController extends Controller
     {
         try {
             $validator = Validator::make($request->all(), [
-                'tahun' => 'nullable|numeric',
+                'tahun_anggaran' => 'nullable|numeric',
                 'triwulan' => 'nullable|numeric|in:1,2,3,4',
                 'id_kcu' => 'nullable|numeric|exists:kprk,id',
                 'status' => 'nullable|string|in:7,9',
@@ -281,7 +303,8 @@ class VerifikasiBiayaRutinController extends Controller
             $search = request()->get('search', '');
             $getOrder = request()->get('order', '');
             $id_kcu = request()->get('id_kcu', '');
-            $tahun = request()->get('tahun', '');
+            dd($id_kcu);
+            $tahun_anggaran = request()->get('tahun_anggaran', '');
             $triwulan = request()->get('triwulan', '');
             $status = request()->get('status', '');
             $defaultOrder = $getOrder ? $getOrder : "kpc.id ASC";
@@ -290,10 +313,10 @@ class VerifikasiBiayaRutinController extends Controller
                 'namakpcDESC' => 'kpc.nama DESC',
                 'namakcuASC' => 'kprk.nama ASC',
                 'namakcuDESC' => 'kprk.nama DESC',
-                'triwulanASC' => 'verifikasi_biaya_rutin.triwulan ASC',
-                'triwulanDESC' => 'verifikasi_biaya_rutin.triwulan DESC',
-                'tahunASC' => 'verifikasi_biaya_rutin.tahun ASC',
-                'tahunDESC' => 'verifikasi_biaya_rutin.tahun DESC',
+                'triwulanASC' => 'produksi.triwulan ASC',
+                'triwulanDESC' => 'produksi.triwulan DESC',
+                'tahunASC' => 'produksi.tahun_anggaran ASC',
+                'tahunDESC' => 'produksi.tahun_anggaran DESC',
             ];
 
             // Set the order based on the mapping or use the default order if not found
@@ -319,49 +342,50 @@ class VerifikasiBiayaRutinController extends Controller
                     'errors' => $validator->errors(),
                 ], 400);
             }
-            $rutinQuery = VerifikasiBiayaRutinDetail::orderByRaw($order)
-                ->select('verifikasi_biaya_rutin.id as id_verifikasi_biaya_rutin', 'verifikasi_biaya_rutin.triwulan', 'verifikasi_biaya_rutin.tahun', 'regional.nama as nama_regional', 'kprk.id as id_kcu', 'kprk.nama as nama_kcu', 'kpc.id as id_kpc', 'kpc.nama as nama_kpc', DB::raw('SUM(verifikasi_biaya_rutin_detail.pelaporan) as total_biaya'))
-                ->join('verifikasi_biaya_rutin', 'verifikasi_biaya_rutin_detail.id_verifikasi_biaya_rutin', '=', 'verifikasi_biaya_rutin.id')
-                ->join('regional', 'verifikasi_biaya_rutin.id_regional', '=', 'regional.id')
-                ->join('kprk', 'verifikasi_biaya_rutin.id_kprk', '=', 'kprk.id')
-                ->join('kpc', 'verifikasi_biaya_rutin.id_kpc', '=', 'kpc.id')
-                ->groupBy('kpc.id', 'kprk.id', 'verifikasi_biaya_rutin.id_regional', 'verifikasi_biaya_rutin.triwulan', 'verifikasi_biaya_rutin.tahun', 'regional.nama')
+            $produksiQuery = VerifikasiProduksiDetail::orderByRaw($order)
+                ->select('produksi.id as id_produksi', 'produksi.triwulan', 'produksi.tahun_anggaran', 'regional.nama as nama_regional', 'kprk.id as id_kcu', 'kprk.nama as nama_kcu', 'kpc.id as id_kpc', 'kpc.nama as nama_kpc', DB::raw('SUM(produksi_detail.pelaporan) as total_produksi'))
+                ->join('produksi', 'produksi_detail.id_produksi', '=', 'produksi.id')
+                ->join('regional', 'produksi.id_regional', '=', 'regional.id')
+                ->join('kprk', 'produksi.id_kprk', '=', 'kprk.id')
+                ->join('kpc', 'produksi.id_kpc', '=', 'kpc.id')
+                ->groupBy('kpc.id', 'kprk.id', 'produksi.id_regional', 'produksi.triwulan', 'produksi.tahun_anggaran', 'regional.nama')
                 ->offset($offset)
                 ->limit($limit);
 
             if ($search !== '') {
-                $rutinQuery->where('kpc.nama', 'like', "%$search%");
+                $produksiQuery->where('kpc.nama', 'like', "%$search%");
             }
             if ($id_kcu !== '') {
-                $rutinQuery->where('verifikasi_biaya_rutin.id_kprk', $id_kcu);
+                $produksiQuery->where('produksi.id_kprk', $id_kcu);
             }
-            if ($tahun !== '') {
-                $rutinQuery->where('verifikasi_biaya_rutin.tahun', $tahun);
+            if ($tahun_anggaran !== '') {
+                $produksiQuery->where('produksi.tahun_anggaran', $tahun_anggaran);
             }
 
             if ($triwulan !== '') {
-                $rutinQuery->where('verifikasi_biaya_rutin.triwulan', $triwulan);
+                $produksiQuery->where('produksi.triwulan', $triwulan);
             }
 
             if ($status !== '') {
                 // Anda perlu menyesuaikan kondisi WHERE ini sesuai dengan struktur tabel dan kondisi yang diinginkan.
-                // Misalnya: $rutinQuery->where('status', $status);
+                // Misalnya: $produksiQuery->where('status', $status);
             }
-            $rutin = $rutinQuery->get();
+            $produksi = $produksiQuery->get();
+            dd($produksi);
 
-            // Mengubah format total_biaya menjadi format Rupiah
-            foreach ($rutin as $item) {
-                $item->total_biaya = "Rp " . number_format($item->total_biaya, 2, ',', '.');
+            // Mengubah format total_produksi menjadi format Rupiah
+            foreach ($produksi as $item) {
+                $item->total_produksi = "Rp " . number_format($item->total_produksi, 2, ',', '.');
 
-                // Ambil VerifikasiBiayaRutin dengan kriteria tertentu
-                $getBiayaRutin = VerifikasiBiayaRutin::where('tahun', $item->tahun)
+                // AmbilVerifikasiProduksi dengan kriteria tertentu
+                $getProduksi = VerifikasiProduksi::where('tahun_anggaran', $item->tahun_anggaran)
                     ->where('id_kprk', $item->id_kprk)
                     ->where('triwulan', $item->triwulan)
                     ->get();
 
-                // Periksa apakah semua status dalam $getBiayaRutin adalah 9
-                $semuaStatusSembilan = $getBiayaRutin->every(function ($biayaRutin) {
-                    return $biayaRutin->id_status == 9;
+                // Periksa apakah semua status dalam $getProduksi adalah 9
+                $semuaStatusSembilan = $getProduksi->every(function ($produksi) {
+                    return $produksi->id_status == 9;
                 });
 
                 // Jika semua status adalah 9, ambil status dari tabel Status
@@ -380,7 +404,7 @@ class VerifikasiBiayaRutinController extends Controller
                 'limit' => $limit,
                 'order' => $getOrder,
                 'search' => $search,
-                'data' => $rutin,
+                'data' => $produksi,
             ]);
         } catch (\Exception $e) {
             return response()->json(['status' => 'ERROR', 'message' => $e->getMessage()], Response::HTTP_INTERNAL_SERVER_ERROR);
@@ -393,11 +417,11 @@ class VerifikasiBiayaRutinController extends Controller
             $offset = request()->get('offset', 0);
             $limit = request()->get('limit', 100);
             $getOrder = request()->get('order', '');
-            $id_verifikasi_biaya_rutin = request()->get('id_verifikasi_biaya_rutin', '');
+            $id_produksi = request()->get('id_produksi', '');
             $id_kcu = request()->get('id_kcu', '');
             $id_kpc = request()->get('id_kpc', '');
             $validator = Validator::make($request->all(), [
-                'id_verifikasi_biaya_rutin' => 'required|string|exists:verifikasi_biaya_rutin,id',
+                'id_produksi' => 'required|string|exists:produksi,id',
                 'id_kpc' => 'required|string|exists:kpc,id',
                 'id_kcu' => 'required|numeric|exists:kprk,id',
             ]);
@@ -415,7 +439,7 @@ class VerifikasiBiayaRutinController extends Controller
                 'namaASC' => 'rekening_biaya.nama ASC',
                 'namaDESC' => 'rekening_biaya.nama DESC',
             ];
-            // dd($request->id_verifikasi_biaya_rutin);
+            // dd($request->id_produksi);
 
             // Set the order based on the mapping or use the default order if not found
             $order = $orderMappings[$getOrder] ?? $defaultOrder;
@@ -440,33 +464,33 @@ class VerifikasiBiayaRutinController extends Controller
                     'errors' => $validator->errors(),
                 ], 400);
             }
-            $rutinQuery = VerifikasiBiayaRutinDetail::orderByRaw($order)
+            $produksiQuery = VerifikasiProduksiDetail::orderByRaw($order)
                 ->select(
-                    // 'verifikasi_biaya_rutin.id as id_verifikasi_biaya_rutin',
+                    // 'produksi.id as id_produksi',
                     'rekening_biaya.kode_rekening',
                     'rekening_biaya.nama as nama_rekening',
-                    'verifikasi_biaya_rutin.triwulan',
-                    'verifikasi_biaya_rutin.tahun',
-                    'verifikasi_biaya_rutin_detail.bulan',
+                    'produksi.triwulan',
+                    'produksi.tahun_anggaran',
+                    'produksi_detail.bulan',
                 )
-                ->join('verifikasi_biaya_rutin', 'verifikasi_biaya_rutin_detail.id_verifikasi_biaya_rutin', '=', 'verifikasi_biaya_rutin.id')
-                ->join('rekening_biaya', 'verifikasi_biaya_rutin_detail.id_rekening_biaya', '=', 'rekening_biaya.id')
-                ->where('verifikasi_biaya_rutin_detail.id_verifikasi_biaya_rutin', $request->id_verifikasi_biaya_rutin)
-                ->where('verifikasi_biaya_rutin.id_kprk', $request->id_kcu)
-                ->where('verifikasi_biaya_rutin.id_kpc', $request->id_kpc)
-                ->groupBy('rekening_biaya.kode_rekening', 'verifikasi_biaya_rutin_detail.bulan')
+                ->join('produksi', 'produksi_detail.id_produksi', '=', 'produksi.id')
+                ->join('rekening_biaya', 'produksi_detail.id_rekening_biaya', '=', 'rekening_biaya.id')
+                ->where('produksi_detail.id_produksi', $request->id_produksi)
+                ->where('produksi.id_kprk', $request->id_kcu)
+                ->where('produksi.id_kpc', $request->id_kpc)
+                ->groupBy('rekening_biaya.kode_rekening', 'produksi_detail.bulan')
                 ->get();
 
             $groupedRutin = [];
             $laporanArray = [];
-            foreach ($rutinQuery as $item) {
+            foreach ($produksiQuery as $item) {
                 $kodeRekening = $item->kode_rekening;
                 $triwulan = $item->triwulan;
 
                 // Jika kode_rekening belum ada dalam array groupedRutin, inisialisasikan dengan array kosong
                 if (!isset($groupedRutin[$kodeRekening])) {
                     $groupedRutin[$kodeRekening] = [
-                        // 'id_verifikasi_biaya_rutin' => $item->id_verifikasi_biaya_rutin,
+                        // 'id_produksi' => $item->id_produksi,
                         'kode_rekening' => $kodeRekening,
                         'nama_rekening' => $item->nama_rekening,
                         'laporan' => $laporanArray, // Inisialisasi array laporan per kode rekening
@@ -490,11 +514,11 @@ class VerifikasiBiayaRutinController extends Controller
                     // Ubah format bulan dari angka menjadi nama bulan dalam bahasa Indonesia
                     $bulanString = $bulanIndonesia[$i - 1];
                     $bulan = $i;
-                    $getPelaporan = VerifikasiBiayaRutinDetail::select(DB::raw('SUM(pelaporan) as total_pelaporan'),
+                    $getPelaporan = VerifikasiProduksiDetail::select(DB::raw('SUM(pelaporan) as total_pelaporan'),
                         DB::raw('SUM(verifikasi) as total_verifikasi'))
                         ->where('bulan', $bulan)
                         ->where('id_rekening_biaya', $kodeRekening)
-                        ->where('id_verifikasi_biaya_rutin', $request->id_verifikasi_biaya_rutin)
+                        ->where('id_produksi', $request->id_produksi)
                         ->get();
 
                     // Pastikan query menghasilkan data sebelum memprosesnya
@@ -538,12 +562,12 @@ class VerifikasiBiayaRutinController extends Controller
             $offset = request()->get('offset', 0);
             $limit = request()->get('limit', 100);
             $getOrder = request()->get('order', '');
-            $id_verifikasi_biaya_rutin = request()->get('id_verifikasi_biaya_rutin', '');
+            $id_produksi = request()->get('id_produksi', '');
             $id_kcu = request()->get('id_kcu', '');
             $id_kpc = request()->get('id_kpc', '');
             $status = 10;
             $validator = Validator::make($request->all(), [
-                'id_verifikasi_biaya_rutin' => 'required|string|exists:verifikasi_biaya_rutin,id',
+                'id_produksi' => 'required|string|exists:produksi,id',
                 'id_kpc' => 'required|string|exists:kpc,id',
                 'id_kcu' => 'required|numeric|exists:kprk,id',
             ]);
@@ -554,14 +578,14 @@ class VerifikasiBiayaRutinController extends Controller
                     'error_code' => 'INPUT_VALIDATION_ERROR',
                 ], 422);
             }
-            $rutin = VerifikasiBiayaRutin::where('id', $request->id_verifikasi_biaya_rutin)
+            $produksi = VerifikasiProduksi::where('id', $request->id_produksi)
                 ->where('id_kprk', $request->id_kcu)
                 ->where('id_kpc', $request->id_kpc)->first();
-            $rutin->update([
+            $produksi->update([
                 'id_status' => 10,
             ]);
 
-            return response()->json(['status' => 'SUCCESS', 'data' => $rutin]);
+            return response()->json(['status' => 'SUCCESS', 'data' => $produksi]);
 
         } catch (\Exception $e) {
             return response()->json(['status' => 'ERROR', 'message' => $e->getMessage()], Response::HTTP_INTERNAL_SERVER_ERROR);
@@ -573,7 +597,7 @@ class VerifikasiBiayaRutinController extends Controller
 
         try {
 
-            $id_verifikasi_biaya_rutin = request()->get('id_verifikasi_biaya_rutin', '');
+            $id_produksi = request()->get('id_produksi', '');
             $kode_rekening = request()->get('kode_rekening', '');
             $bulan = request()->get('bulan', '');
             $id_kcu = request()->get('id_kcu', '');
@@ -581,7 +605,7 @@ class VerifikasiBiayaRutinController extends Controller
             $validator = Validator::make($request->all(), [
                 'bulan' => 'required|numeric|max:12',
                 'kode_rekening' => 'required|numeric|exists:rekening_biaya,id',
-                'id_verifikasi_biaya_rutin' => 'required|string|exists:verifikasi_biaya_rutin,id',
+                'id_produksi' => 'required|string|exists:produksi,id',
                 'id_kpc' => 'required|string|exists:kpc,id',
                 'id_kcu' => 'required|string|exists:kprk,id',
             ]);
@@ -598,40 +622,40 @@ class VerifikasiBiayaRutinController extends Controller
                 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember',
             ];
 
-            $rutin = VerifikasiBiayaRutinDetail::select(
-                'verifikasi_biaya_rutin_detail.id as id_verifikasi_biaya_rutin_detail',
+            $produksi = VerifikasiProduksiDetail::select(
+                'produksi_detail.id as id_produksi_detail',
                 'rekening_biaya.kode_rekening',
                 'rekening_biaya.nama as nama_rekening',
-                'verifikasi_biaya_rutin.tahun',
+                'produksi.tahun_anggaran',
                 DB::raw("CONCAT('" . $bulanIndonesia[$request->bulan - 1] . "') AS periode"),
-                'verifikasi_biaya_rutin_detail.keterangan',
-                'verifikasi_biaya_rutin_detail.lampiran',
-                'verifikasi_biaya_rutin_detail.pelaporan',
-                'verifikasi_biaya_rutin_detail.verifikasi',
-                'verifikasi_biaya_rutin_detail.catatan_pemeriksa',
+                'produksi_detail.keterangan',
+                'produksi_detail.lampiran',
+                'produksi_detail.pelaporan',
+                'produksi_detail.verifikasi',
+                'produksi_detail.catatan_pemeriksa',
             )
 
-                ->where('verifikasi_biaya_rutin_detail.id_verifikasi_biaya_rutin', $request->id_verifikasi_biaya_rutin)
-                ->where('verifikasi_biaya_rutin_detail.id_rekening_biaya', $request->kode_rekening)
-                ->where('verifikasi_biaya_rutin_detail.bulan', $request->bulan)
-                ->where('verifikasi_biaya_rutin.id_kprk', $request->id_kcu)
-                ->where('verifikasi_biaya_rutin.id_kpc', $request->id_kpc)
-                ->join('verifikasi_biaya_rutin', 'verifikasi_biaya_rutin_detail.id_verifikasi_biaya_rutin', '=', 'verifikasi_biaya_rutin.id')
-                ->join('rekening_biaya', 'verifikasi_biaya_rutin_detail.id_rekening_biaya', '=', 'rekening_biaya.id')
-                ->join('kprk', 'verifikasi_biaya_rutin.id_kprk', '=', 'kprk.id')
+                ->where('produksi_detail.id_produksi', $request->id_produksi)
+                ->where('produksi_detail.id_rekening_biaya', $request->kode_rekening)
+                ->where('produksi_detail.bulan', $request->bulan)
+                ->where('produksi.id_kprk', $request->id_kcu)
+                ->where('produksi.id_kpc', $request->id_kpc)
+                ->join('produksi', 'produksi_detail.id_produksi', '=', 'produksi.id')
+                ->join('rekening_biaya', 'produksi_detail.id_rekening_biaya', '=', 'rekening_biaya.id')
+                ->join('kprk', 'produksi.id_kprk', '=', 'kprk.id')
                 ->get();
 
-            // dd($rutin);
+            // dd($produksi);
 
-            // Mengubah format total_biaya menjadi format Rupiah
-            foreach ($rutin as $item) {
+            // Mengubah format total_produksi menjadi format Rupiah
+            foreach ($produksi as $item) {
                 $item->pelaporan = "Rp " . number_format($item->pelaporan, 2, ',', '.');
                 $item->verifikasi = "Rp " . number_format($item->verifikasi, 2, ',', '.');
             }
 
             return response()->json([
                 'status' => 'SUCCESS',
-                'data' => $rutin,
+                'data' => $produksi,
             ]);
         } catch (\Exception $e) {
             return response()->json(['status' => 'ERROR', 'message' => $e->getMessage()], Response::HTTP_INTERNAL_SERVER_ERROR);
@@ -642,7 +666,7 @@ class VerifikasiBiayaRutinController extends Controller
     {
         try {
             $validator = Validator::make($request->all(), [
-                'id_verifikasi_biaya_rutin_detail' => 'required|numeric|exists:verifikasi_biaya_rutin_detail,id',
+                'id_produksi_detail' => 'required|numeric|exists:produksi_detail,id',
                 'verifikasi' => 'required|string',
                 'catatan_pemeriksa' => 'required|string',
             ]);
@@ -651,7 +675,7 @@ class VerifikasiBiayaRutinController extends Controller
                 return response()->json(['status' => 'ERROR', 'message' => $validator->errors()], Response::HTTP_UNPROCESSABLE_ENTITY);
             }
 
-            $id_verifikasi_biaya_rutin_detail = $request->id_verifikasi_biaya_rutin_detail;
+            $id_produksi_detail = $request->id_produksi_detail;
             $verifikasi = $request->verifikasi;
 
             // Menghapus karakter "Rp." dan tanda "." dari string
@@ -672,25 +696,25 @@ class VerifikasiBiayaRutinController extends Controller
             $id_validator = Auth::user()->id;
             $tanggal_verifikasi = now();
 
-            $verifikasi_biaya_rutin_detail = VerifikasiBiayaRutinDetail::find($id_verifikasi_biaya_rutin_detail);
+            $produksi_detail = VerifikasiProduksiDetail::find($id_produksi_detail);
 
-            $verifikasi_biaya_rutin_detail->update([
+            $produksi_detail->update([
                 'verifikasi' => $verifikasiFormatted,
                 'catatan_pemeriksa' => $catatan_pemeriksa,
                 'id_validator' => $id_validator,
                 'tgl_verifikasi' => $tanggal_verifikasi,
             ]);
 
-            if ($verifikasi_biaya_rutin_detail) {
-                $rutin = VerifikasiBiayaRutinDetail::where('id_verifikasi_biaya_rutin', $verifikasi_biaya_rutin_detail->id_verifikasi_biaya_rutin)->get();
-                $countValid = $rutin->filter(function ($detail) {
+            if ($produksi_detail) {
+                $produksi = VerifikasiProduksiDetail::where('id_produksi', $produksi_detail->id_produksi)->get();
+                $countValid = $produksi->filter(function ($detail) {
                     return $detail->verifikasi != 0.00 && $detail->tgl_verifikasi !== null;
                 })->count();
 
-                if ($countValid === $rutin->count()) {
-                    VerifikasiBiayaRutin::where('id', $id_verifikasi_biaya_rutin)->update(['id_status' => 9]);
+                if ($countValid === $produksi->count()) {
+                    VerifikasiProduksi::where('id', $id_produksi)->update(['id_status' => 9]);
                 }
-                return response()->json(['status' => 'SUCCESS', 'data' => $verifikasi_biaya_rutin_detail]);
+                return response()->json(['status' => 'SUCCESS', 'data' => $produksi_detail]);
             }
 
         } catch (\Exception $e) {

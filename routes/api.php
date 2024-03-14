@@ -22,6 +22,7 @@ use App\Http\Controllers\ResetPasswordController;
 use App\Http\Controllers\SyncApiController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\VerifikasiBiayaRutinController;
+use App\Http\Controllers\VerifikasiProduksiController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -34,33 +35,33 @@ use Illuminate\Support\Facades\Route;
 | be assigned to the "api" middleware group. Make something great!
 |
  */
-Route::get('/welcome', function () {
-    return view('welcome');
-})->name('welcome');
-Route::get('/clear-cache', function () {
-    $exitCode = Artisan::call('cache:clear');
-    return '<h1>Cache cleared</h1>';
-})->name('clear-cache');
+// Route::get('/welcome', function () {
+//     return view('welcome');
+// })->name('welcome');
+// Route::get('/clear-cache', function () {
+//     $exitCode = Artisan::call('cache:clear');
+//     return '<h1>Cache cleared</h1>';
+// })->name('clear-cache');
 
-Route::get('/route-clear', function () {
-    $exitCode = Artisan::call('route:clear');
-    return '<h1>Route cache cleared</h1>';
-})->name('route-clear');
+// Route::get('/route-clear', function () {
+//     $exitCode = Artisan::call('route:clear');
+//     return '<h1>Route cache cleared</h1>';
+// })->name('route-clear');
 
-Route::get('/config-cache', function () {
-    $exitCode = Artisan::call('config:cache');
-    return '<h1>Configuration cached</h1>';
-})->name('config-cache');
+// Route::get('/config-cache', function () {
+//     $exitCode = Artisan::call('config:cache');
+//     return '<h1>Configuration cached</h1>';
+// })->name('config-cache');
 
-Route::get('/optimize', function () {
-    $exitCode = Artisan::call('optimize');
-    return '<h1>Configuration cached</h1>';
-})->name('optimize');
+// Route::get('/optimize', function () {
+//     $exitCode = Artisan::call('optimize');
+//     return '<h1>Configuration cached</h1>';
+// })->name('optimize');
 
-Route::get('/storage-link', function () {
-    $exitCode = Artisan::call('storage:link');
-    return '<h1>storage linked</h1>';
-})->name('optimize');
+// Route::get('/storage-link', function () {
+//     $exitCode = Artisan::call('storage:link');
+//     return '<h1>storage linked</h1>';
+// })->name('optimize');
 
 Route::get('/get-token', [ApiController::class, 'getToken']);
 Route::get('/get-signature', [ApiController::class, 'generateSignature']);
@@ -152,6 +153,15 @@ Route::middleware('auth:api')->group(function () {
         Route::get('rutin-kpc', [VerifikasiBiayaRutinController::class, 'getPerKPC'])->name('rutin-kpc');
         Route::get('rutin-detail', [VerifikasiBiayaRutinController::class, 'getDetail'])->name('rutin-detail');
         Route::post('rutin-verifikasi', [VerifikasiBiayaRutinController::class, 'verifikasi'])->name('rutin-verifikasi');
+        Route::post('rutin-not-simpling', [VerifikasiBiayaRutinController::class, 'notSimpling'])->name('rutin-not-simpling');
+
+        Route::get('produksi-tahun', [VerifikasiProduksiController::class, 'getPerTahun'])->name('produksi-tahun');
+        Route::get('produksi-regional', [VerifikasiProduksiController::class, 'getPerRegional'])->name('produksi-regional');
+        Route::get('produksi-kcu', [VerifikasiProduksiController::class, 'getPerKCU'])->name('produksi-kcu');
+        Route::get('produksi-kpc', [VerifikasiProduksiController::class, 'getPerKPC'])->name('produksi-kpc');
+        Route::get('produksi-detail', [VerifikasiProduksiController::class, 'getDetail'])->name('produksi-detail');
+        Route::post('produksi-verifikasi', [VerifikasiProduksiController::class, 'verifikasi'])->name('produksi-verifikasi');
+        Route::post('produksi-not-simpling', [VerifikasiProduksiController::class, 'notSimpling'])->name('produksi-not-simpling');
 
     });
 });
