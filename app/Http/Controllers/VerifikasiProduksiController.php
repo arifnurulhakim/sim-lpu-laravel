@@ -370,7 +370,7 @@ class VerifikasiProduksiController extends Controller
                 // Misalnya: $produksiQuery->where('status', $status);
             }
             $produksi = $produksiQuery->get();
-            dd($produksi);
+            // dd($produksi);
 
             // Mengubah format total_produksi menjadi format Rupiah
             foreach ($produksi as $item) {
