@@ -2,18 +2,18 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Regional;
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
-use Symfony\Component\HttpFoundation\Response;
-use App\Models\Regional;
-use App\Models\PetugasKPC;
 use App\Models\BiayaArtibusi;
 use App\Models\BiayaArtibusiDetail;
 use App\Models\JenisBisnis;
 use App\Models\KategoriBiaya;
+use App\Models\Kprk;
+use App\Models\PetugasKPC;
+use App\Models\Regional;
 use App\Models\RekeningBiaya;
-use App\Models\RekeningProduksi;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Symfony\Component\HttpFoundation\Response;
+
 class SyncApiController extends Controller
 {
     public function syncRegional()
@@ -41,11 +41,9 @@ class SyncApiController extends Controller
             // Memulai transaksi database untuk meningkatkan kinerja
             DB::beginTransaction();
 
-
             foreach ($dataRegional as $data) {
                 // Mencari provinsi berdasarkan ID
                 $regional = Regional::find($data['id_regional']);
-
 
                 if ($regional) {
                     $regional->update([
@@ -103,11 +101,9 @@ class SyncApiController extends Controller
             // Memulai transaksi database untuk meningkatkan kinerja
             DB::beginTransaction();
 
-
             foreach ($dataKategoriBiaya as $data) {
                 // Mencari provinsi berdasarkan ID
                 $kategoriBiaya = KategoriBiaya::find($data['id']);
-
 
                 if ($kategoriBiaya) {
                     $kategoriBiaya->update([
@@ -164,11 +160,9 @@ class SyncApiController extends Controller
             // Memulai transaksi database untuk meningkatkan kinerja
             DB::beginTransaction();
 
-
             foreach ($dataRekeningBiaya as $data) {
                 // Mencari provinsi berdasarkan ID
                 $rekeningBiaya = RekeningBiaya::find($data['id_rekening']);
-
 
                 if ($rekeningBiaya) {
                     $rekeningBiaya->update([
@@ -226,14 +220,13 @@ class SyncApiController extends Controller
             // Memulai transaksi database untuk meningkatkan kinerja
             DB::beginTransaction();
 
-
             foreach ($dataRekeningProduksi as $data) {
                 // Mencari provinsi berdasarkan ID
-                $rekeningProduksi = RekeningBiaya::find($data['id']);
-
+                $rekeningProduksi = RekeningBiaya::find($data['id_rekening']);
 
                 if ($rekeningProduksi) {
                     $rekeningProduksi->update([
+
                         'nama' => $data['nama_rekening'],
                         'id_produk' => $data['id_produk'],
                         'nama_produk' => $data['nama_produk'],
@@ -293,11 +286,9 @@ class SyncApiController extends Controller
             // Memulai transaksi database untuk meningkatkan kinerja
             DB::beginTransaction();
 
-
             foreach ($dataTipeBisnis as $data) {
                 // Mencari provinsi berdasarkan ID
                 $rekeningBiaya = JenisBisnis::find($data['id']);
-
 
                 if ($rekeningBiaya) {
                     $rekeningBiaya->update([
@@ -337,11 +328,13 @@ class SyncApiController extends Controller
             // Membuat instance dari ApiController
             $apiController = new ApiController();
             $url_request = $endpoint . '?id_kpc=' . $id_kpc;
-            // Memanggil makeRequest dari ApiController untuk sinkronisasi dengan endpoint provinsi
+            $request->merge(['end_point' => $url_request]);
+
             $response = $apiController->makeRequest($request);
+            // dd($response);
 
             // Mengambil data provinsi dari respons
-            $dataPetugasKPC = $response['data'];
+            $dataPetugasKPC = $response['data'] ?? [];
             if (!$dataPetugasKPC) {
                 return response()->json(['message' => 'Terjadi kesalahan: sync error'], 500);
             }
@@ -349,11 +342,9 @@ class SyncApiController extends Controller
             // Memulai transaksi database untuk meningkatkan kinerja
             DB::beginTransaction();
 
-
             foreach ($dataPetugasKPC as $data) {
                 // Mencari provinsi berdasarkan ID
-                $petugasKPC = PetugasKPC::find($data['id_kpc']);
-
+                $petugasKPC = PetugasKPC::where('id_kpc', $data['id_kpc']);
 
                 if ($petugasKPC) {
                     $petugasKPC->update([
@@ -400,12 +391,13 @@ class SyncApiController extends Controller
             $id_kprk = $request->id_kprk;
             // Membuat instance dari ApiController
             $apiController = new ApiController();
-            $url_request = $endpoint . '?id_kprk=' . $id_kprk;
-            // Memanggil makeRequest dari ApiController untuk sinkronisasi dengan endpoint provinsi
-            $response = $apiController->makeRequest($request);
 
+            $url_request = $endpoint . '?id_kprk=' . $id_kprk;
+            $request->merge(['end_point' => $url_request]);
+
+            $response = $apiController->makeRequest($request);
             // Mengambil data provinsi dari respons
-            $dataKCU = $response['data'];
+            $dataKCU = $response['data'] ?? [];
             if (!$dataKCU) {
                 return response()->json(['message' => 'Terjadi kesalahan: sync error'], 500);
             }
@@ -413,11 +405,9 @@ class SyncApiController extends Controller
             // Memulai transaksi database untuk meningkatkan kinerja
             DB::beginTransaction();
 
-
             foreach ($dataKCU as $data) {
                 // Mencari provinsi berdasarkan ID
                 $petugasKCU = Kprk::find($data['id_kprk']);
-
 
                 if ($petugasKCU) {
                     $petugasKCU->update([
@@ -511,7 +501,6 @@ class SyncApiController extends Controller
         }
     }
 
-
     public function syncBiayaAtribusi(Request $request)
     {
         try {
@@ -523,17 +512,17 @@ class SyncApiController extends Controller
             $bulan = $request->bulan;
             $tahun = $request->tahun;
 
-            if($kategori_biaya == 1){
+            if ($kategori_biaya == 1) {
                 $endpoint = 'biaya_upl';
-            }elseif($kategori_biaya == 2){
+            } elseif ($kategori_biaya == 2) {
                 $endpoint = 'biaya_angkutan_pos_setempat';
-            }else{
+            } else {
                 $endpoint = 'biaya_sopir_tersier';
             }
 
             // Membuat instance dari ApiController
             $apiController = new ApiController();
-            $url_request = $endpoint . '?bulan=' . $bulan .'&id_kprk='. $id_kprk . '&tahun=' . $tahun;
+            $url_request = $endpoint . '?bulan=' . $bulan . '&id_kprk=' . $id_kprk . '&tahun=' . $tahun;
             // Memanggil makeRequest dari ApiController untuk sinkronisasi dengan endpoint provinsi
             $response = $apiController->makeRequest($request);
 
@@ -546,12 +535,10 @@ class SyncApiController extends Controller
             // Memulai transaksi database untuk meningkatkan kinerja
             DB::beginTransaction();
 
-
             foreach ($dataBiayaAtribusi as $data) {
                 // Mencari provinsi berdasarkan ID
                 $biayaAtribusi = BiayaArtibusi::find($data['id']);
-                $biayaAtribusiDetail = BiayaArtibusiDetail::where('id_biaya_atribusi',$biayaAtribusi->id)->where('id_rekening_biaya',$data['koderekening'])->get();
-
+                $biayaAtribusiDetail = BiayaArtibusiDetail::where('id_biaya_atribusi', $biayaAtribusi->id)->where('id_rekening_biaya', $data['koderekening'])->get();
 
                 if ($petugasKPC) {
                     $petugasKPC->update([
@@ -602,7 +589,7 @@ class SyncApiController extends Controller
 
             // Membuat instance dari ApiController
             $apiController = new ApiController();
-            $url_request = $endpoint . '?nopend=' . $no_kcp .'&kd_bisnis='. $tipe_bisnis . '&tahun=' . $tahun. '&triwulan=' . $triwulan;
+            $url_request = $endpoint . '?nopend=' . $no_kcp . '&kd_bisnis=' . $tipe_bisnis . '&tahun=' . $tahun . '&triwulan=' . $triwulan;
             // Memanggil makeRequest dari ApiController untuk sinkronisasi dengan endpoint provinsi
             $response = $apiController->makeRequest($request);
 
@@ -615,12 +602,10 @@ class SyncApiController extends Controller
             // Memulai transaksi database untuk meningkatkan kinerja
             DB::beginTransaction();
 
-
             foreach ($dataBiayaAtribusi as $data) {
                 // Mencari provinsi berdasarkan ID
                 $biayaAtribusi = BiayaArtibusi::find($data['id']);
-                $biayaAtribusiDetail = BiayaArtibusiDetail::where('id_biaya_atribusi',$biayaAtribusi->id)->where('id_rekening_biaya',$data['koderekening'])->get();
-
+                $biayaAtribusiDetail = BiayaArtibusiDetail::where('id_biaya_atribusi', $biayaAtribusi->id)->where('id_rekening_biaya', $data['koderekening'])->get();
 
                 if ($petugasKPC) {
                     $petugasKPC->update([

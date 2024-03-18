@@ -90,6 +90,7 @@ class ApiController extends Controller
         $RequestBody = "";
         $hash = hash('sha256', $RequestBody);
         $StringToSign = $HttpMethod . ":" . $relativeUrl . ":" . $access_token . ":" . $hash . ":" . $timestamp;
+        $auth_signature = hash_hmac('sha256', $StringToSign, $secret_key);
 
         $client = new Client();
 
@@ -102,7 +103,7 @@ class ApiController extends Controller
                     'X-POS-Key' => 'a29taW5mbw==dEpUaDhDRXg3dw==',
                     'X-POS-Timestamp' => $timestamp,
                     // 'X-POS-Signature' => hash_hmac('sha256', $StringToSign, $secret_key),
-                    'X-POS-Signature' => '16fbd8b3cb0f6101774699b0f03c70d7fc262a2e0e8df96a6e9c11c88e99b5e9',
+                    'X-POS-Signature' => $auth_signature,
                 ],
             ]);
 
