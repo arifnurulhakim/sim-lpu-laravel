@@ -649,15 +649,8 @@ class VerifikasiProduksiController extends Controller
                 'produksi_detail.pelaporan',
                 'produksi_detail.verifikasi',
                 'produksi_detail.catatan_pemeriksa',
-                // DB::raw("CONCAT('" . $bulanIndonesia['produksi_detail.nama_bulan'-1] . "') AS periode")
             )
                 ->where('produksi_detail.id', $request->id_produksi_detail)
-            // Aktifkan filter yang telah Anda komentari
-            // ->where('produksi_detail.id_produksi', $request->id_produksi)
-            // ->where('produksi_detail.kode_rekening', $request->kode_rekening)
-            // ->where('produksi_detail.nama_bulan', $request->bulan)
-            // ->where('produksi.id_kprk', $request->id_kcu)
-            // ->where('produksi.id_kpc', $request->id_kpc)
                 ->join('produksi', 'produksi_detail.id_produksi', '=', 'produksi.id')
                 ->join('rekening_produksi', 'produksi_detail.kode_rekening', '=', 'rekening_produksi.kode_rekening')
                 ->join('kprk', 'produksi.id_kprk', '=', 'kprk.id')
@@ -678,61 +671,103 @@ class VerifikasiProduksiController extends Controller
         }
     }
 
+    // public function verifikasi(Request $request)
+    // {
+    //     try {
+    //         $validator = Validator::make($request->all(), [
+    //             '*.id_produksi_detail' => 'required|string|exists:produksi_detail,id',
+    //             '*.verifikasi' => 'required|string',
+    //             '*.catatan_pemeriksa' => 'required|string',
+    //         ]);
+
+    //         if ($validator->fails()) {
+    //             return response()->json(['status' => 'ERROR', 'message' => $validator->errors()], Response::HTTP_UNPROCESSABLE_ENTITY);
+    //         }
+
+    //         foreach ($request->all() as $data) {
+    //             $id_produksi_detail = $data['id_produksi_detail'];
+    //             $verifikasi = $data['verifikasi'];
+    //             $verifikasi = str_replace(['Rp.', '.'], '', $verifikasi);
+    //             $verifikasi = str_replace(',', '.', $verifikasi);
+    //             $verifikasiFloat = (float) $verifikasi;
+    //             $verifikasiFormatted = number_format($verifikasiFloat, 2, '.', '');
+    //             $catatan_pemeriksa = $data['catatan_pemeriksa'];
+    //             $id_validator = Auth::user()->id;
+    //             $tanggal_verifikasi = now();
+
+    //             $produksi_detail = VerifikasiProduksiDetail::find($id_produksi_detail);
+
+    //             $produksi_detail->update([
+    //                 'verifikasi' => $verifikasiFormatted,
+    //                 'catatan_pemeriksa' => $catatan_pemeriksa,
+    //                 'id_validator' => $id_validator,
+    //                 'tgl_verifikasi' => $tanggal_verifikasi,
+    //             ]);
+
+    //             if ($produksi_detail) {
+    //                 $produksi = VerifikasiProduksiDetail::where('id_produksi', $produksi_detail->id_produksi)->get();
+    //                 $countValid = $produksi->filter(function ($detail) {
+    //                     return $detail->verifikasi != 0.00 && $detail->tgl_verifikasi !== null;
+    //                 })->count();
+
+    //                 if ($countValid === $produksi->count()) {
+    //                     VerifikasiProduksi::where('id', $id_produksi)->update(['id_status' => 9]);
+    //                 }
+    //             }
+    //         }
+
+    //         return response()->json(['status' => 'SUCCESS']);
+    //     } catch (\Exception $e) {
+    //         return response()->json(['status' => 'ERROR', 'message' => $e->getMessage()], Response::HTTP_INTERNAL_SERVER_ERROR);
+    //     }
+    // }
+
     public function verifikasi(Request $request)
     {
         try {
             $validator = Validator::make($request->all(), [
-                'id_produksi_detail' => 'required|string|exists:produksi_detail,id',
-                'verifikasi' => 'required|string',
-                'catatan_pemeriksa' => 'required|string',
+                'data.*.id_produksi_detail' => 'required|string|exists:produksi_detail,id',
+                'data.*.verifikasi' => 'required|string',
+                'data.*.catatan_pemeriksa' => 'string',
             ]);
 
             if ($validator->fails()) {
                 return response()->json(['status' => 'ERROR', 'message' => $validator->errors()], Response::HTTP_UNPROCESSABLE_ENTITY);
             }
 
-            $id_produksi_detail = $request->id_produksi_detail;
-            $verifikasi = $request->verifikasi;
+            $verifikasiData = $request->input('data');
+            $updatedData = [];
 
-            // Menghapus karakter "Rp." dan tanda "." dari string
-            $verifikasi = str_replace(['Rp.', '.'], '', $verifikasi);
-            // Mengganti tanda koma (",") dengan titik (".") untuk menyatakan bagian desimal
-            $verifikasi = str_replace(',', '.', $verifikasi);
-            // dd($verifikasi);
-
-            // Mengubah string menjadi float
-            $verifikasiFloat = (float) $verifikasi;
-
-            // Format ulang float menjadi string dengan 2 angka desimal
-            $verifikasiFormatted = number_format($verifikasiFloat, 2, '.', '');
-
-            // Output: "462972.00"
-
-            $catatan_pemeriksa = $request->input('catatan_pemeriksa');
-            $id_validator = Auth::user()->id;
-            $tanggal_verifikasi = now();
-
-            $produksi_detail = VerifikasiProduksiDetail::find($id_produksi_detail);
-
-            $produksi_detail->update([
-                'verifikasi' => $verifikasiFormatted,
-                'catatan_pemeriksa' => $catatan_pemeriksa,
-                'id_validator' => $id_validator,
-                'tgl_verifikasi' => $tanggal_verifikasi,
-            ]);
-
-            if ($produksi_detail) {
-                $produksi = VerifikasiProduksiDetail::where('id_produksi', $produksi_detail->id_produksi)->get();
-                $countValid = $produksi->filter(function ($detail) {
-                    return $detail->verifikasi != 0.00 && $detail->tgl_verifikasi !== null;
-                })->count();
-
-                if ($countValid === $produksi->count()) {
-                    VerifikasiProduksi::where('id', $id_produksi)->update(['id_status' => 9]);
+            foreach ($verifikasiData as $data) {
+                if (!isset($data['id_produksi_detail']) || !isset($data['verifikasi'])) {
+                    return response()->json(['status' => 'ERROR', 'message' => 'Invalid data structure'], Response::HTTP_BAD_REQUEST);
                 }
-                return response()->json(['status' => 'SUCCESS', 'data' => $produksi_detail]);
+
+                $id_produksi_detail = $data['id_produksi_detail'];
+                $verifikasi = str_replace(['Rp.', ',', '.'], '', $data['verifikasi']);
+                $verifikasiFloat = (float) $verifikasi;
+                $verifikasiFormatted = number_format($verifikasiFloat, 2, '.', '');
+                $catatan_pemeriksa = isset($data['catatan_pemeriksa']) ? $data['catatan_pemeriksa'] : '';
+                $id_validator = Auth::user()->id;
+                $tanggal_verifikasi = now();
+
+                $produksi_detail = VerifikasiProduksiDetail::find($id_produksi_detail);
+
+                if (!$produksi_detail) {
+                    return response()->json(['status' => 'ERROR', 'message' => 'Detail produksi tidak ditemukan'], Response::HTTP_NOT_FOUND);
+                }
+
+                $produksi_detail->update([
+                    'verifikasi' => $verifikasiFormatted,
+                    'catatan_pemeriksa' => $catatan_pemeriksa,
+                    'id_validator' => $id_validator,
+                    'tgl_verifikasi' => $tanggal_verifikasi,
+                ]);
+
+                $updatedData[] = $produksi_detail; // Menambahkan data yang diperbarui ke dalam array
             }
 
+            return response()->json(['status' => 'SUCCESS', 'data' => $updatedData]);
         } catch (\Exception $e) {
             return response()->json(['status' => 'ERROR', 'message' => $e->getMessage()], Response::HTTP_INTERNAL_SERVER_ERROR);
         }

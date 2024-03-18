@@ -642,57 +642,48 @@ class VerifikasiBiayaRutinController extends Controller
     {
         try {
             $validator = Validator::make($request->all(), [
-                'id_verifikasi_biaya_rutin_detail' => 'required|numeric|exists:verifikasi_biaya_rutin_detail,id',
-                'verifikasi' => 'required|string',
-                'catatan_pemeriksa' => 'required|string',
+                'data.*.id_verifikasi_biaya_rutin_detail' => 'required|string|exists:verifikasi_biaya_rutin_detail,id',
+                'data.*.verifikasi' => 'required|string',
+                'data.*.catatan_pemeriksa' => 'string',
             ]);
 
             if ($validator->fails()) {
                 return response()->json(['status' => 'ERROR', 'message' => $validator->errors()], Response::HTTP_UNPROCESSABLE_ENTITY);
             }
 
-            $id_verifikasi_biaya_rutin_detail = $request->id_verifikasi_biaya_rutin_detail;
-            $verifikasi = $request->verifikasi;
+            $verifikasiData = $request->input('data');
+            $updatedData = [];
 
-            // Menghapus karakter "Rp." dan tanda "." dari string
-            $verifikasi = str_replace(['Rp.', '.'], '', $verifikasi);
-            // Mengganti tanda koma (",") dengan titik (".") untuk menyatakan bagian desimal
-            $verifikasi = str_replace(',', '.', $verifikasi);
-            // dd($verifikasi);
-
-            // Mengubah string menjadi float
-            $verifikasiFloat = (float) $verifikasi;
-
-            // Format ulang float menjadi string dengan 2 angka desimal
-            $verifikasiFormatted = number_format($verifikasiFloat, 2, '.', '');
-
-            // Output: "462972.00"
-
-            $catatan_pemeriksa = $request->input('catatan_pemeriksa');
-            $id_validator = Auth::user()->id;
-            $tanggal_verifikasi = now();
-
-            $verifikasi_biaya_rutin_detail = VerifikasiBiayaRutinDetail::find($id_verifikasi_biaya_rutin_detail);
-
-            $verifikasi_biaya_rutin_detail->update([
-                'verifikasi' => $verifikasiFormatted,
-                'catatan_pemeriksa' => $catatan_pemeriksa,
-                'id_validator' => $id_validator,
-                'tgl_verifikasi' => $tanggal_verifikasi,
-            ]);
-
-            if ($verifikasi_biaya_rutin_detail) {
-                $rutin = VerifikasiBiayaRutinDetail::where('id_verifikasi_biaya_rutin', $verifikasi_biaya_rutin_detail->id_verifikasi_biaya_rutin)->get();
-                $countValid = $rutin->filter(function ($detail) {
-                    return $detail->verifikasi != 0.00 && $detail->tgl_verifikasi !== null;
-                })->count();
-
-                if ($countValid === $rutin->count()) {
-                    VerifikasiBiayaRutin::where('id', $id_verifikasi_biaya_rutin)->update(['id_status' => 9]);
+            foreach ($verifikasiData as $data) {
+                if (!isset($data['id_verifikasi_biaya_rutin_detail']) || !isset($data['verifikasi'])) {
+                    return response()->json(['status' => 'ERROR', 'message' => 'Invalid data structure'], Response::HTTP_BAD_REQUEST);
                 }
-                return response()->json(['status' => 'SUCCESS', 'data' => $verifikasi_biaya_rutin_detail]);
+
+                $id_verifikasi_biaya_rutin_detail = $data['id_verifikasi_biaya_rutin_detail'];
+                $verifikasi = str_replace(['Rp.', ',', '.'], '', $data['verifikasi']);
+                $verifikasiFloat = (float) $verifikasi;
+                $verifikasiFormatted = number_format($verifikasiFloat, 2, '.', '');
+                $catatan_pemeriksa = isset($data['catatan_pemeriksa']) ? $data['catatan_pemeriksa'] : '';
+                $id_validator = Auth::user()->id;
+                $tanggal_verifikasi = now();
+
+                $biaya_rutin_detail = VerifikasiBiayaRutinDetail::find($id_verifikasi_biaya_rutin_detail);
+
+                if (!$biaya_rutin_detail) {
+                    return response()->json(['status' => 'ERROR', 'message' => 'Detail biaya rutin tidak ditemukan'], Response::HTTP_NOT_FOUND);
+                }
+
+                $biaya_rutin_detail->update([
+                    'verifikasi' => $verifikasiFormatted,
+                    'catatan_pemeriksa' => $catatan_pemeriksa,
+                    'id_validator' => $id_validator,
+                    'tgl_verifikasi' => $tanggal_verifikasi,
+                ]);
+
+                $updatedData[] = $biaya_rutin_detail; // Menambahkan data yang diperbarui ke dalam array
             }
 
+            return response()->json(['status' => 'SUCCESS', 'data' => $updatedData]);
         } catch (\Exception $e) {
             return response()->json(['status' => 'ERROR', 'message' => $e->getMessage()], Response::HTTP_INTERNAL_SERVER_ERROR);
         }

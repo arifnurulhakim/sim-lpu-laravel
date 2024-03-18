@@ -479,44 +479,48 @@ class BiayaAtribusiController extends Controller
     {
         try {
             $validator = Validator::make($request->all(), [
-                'id_biaya_atribusi_detail' => 'required|numeric|exists:biaya_atribusi_detail,id',
-                'verifikasi' => 'required|string',
-                'catatan_pemeriksa' => 'required|string',
+                'data.*.id_biaya_atribusi_detail' => 'required|string|exists:biaya_atribusi_detail,id',
+                'data.*.verifikasi' => 'required|string',
+                'data.*.catatan_pemeriksa' => 'string',
             ]);
 
             if ($validator->fails()) {
                 return response()->json(['status' => 'ERROR', 'message' => $validator->errors()], Response::HTTP_UNPROCESSABLE_ENTITY);
             }
 
-            $id_biaya_atribusi_detail = $request->id_biaya_atribusi_detail;
-            $verifikasi = $request->verifikasi;
-            $verifikasi = str_replace(['Rp.', '.', ',00'], '', $request->verifikasi);
-            $verifikasiInt = intval($verifikasi);
-            $catatan_pemeriksa = $request->input('catatan_pemeriksa');
-            $id_validator = Auth::user()->id;
-            $tanggal_verifikasi = now();
+            $verifikasiData = $request->input('data');
+            $updatedData = [];
 
-            $biaya_atribusi_detail = BiayaAtribusiDetail::find($id_biaya_atribusi_detail);
-
-            $biaya_atribusi_detail->update([
-                'verifikasi' => $verifikasiInt,
-                'catatan_pemeriksa' => $catatan_pemeriksa,
-                'id_validator' => $id_validator,
-                'tgl_verifikasi' => $tanggal_verifikasi,
-            ]);
-
-            if ($biaya_atribusi_detail) {
-                $atribusi = BiayaAtribusiDetail::where('id_biaya_atribusi', $biaya_atribusi_detail->id_biaya_atribusi)->get();
-                $countValid = $atribusi->filter(function ($detail) {
-                    return $detail->verifikasi != 0.00 && $detail->tgl_verifikasi !== null;
-                })->count();
-
-                if ($countValid === $atribusi->count()) {
-                    BiayaAtribusi::where('id', $id_biaya_atribusi)->update(['id_status' => 9]);
+            foreach ($verifikasiData as $data) {
+                if (!isset($data['id_biaya_atribusi_detail']) || !isset($data['verifikasi'])) {
+                    return response()->json(['status' => 'ERROR', 'message' => 'Invalid data structure'], Response::HTTP_BAD_REQUEST);
                 }
-                return response()->json(['status' => 'SUCCESS', 'data' => $biaya_atribusi_detail]);
+
+                $id_biaya_atribusi_detail = $data['id_biaya_atribusi_detail'];
+                $verifikasi = str_replace(['Rp.', ',', '.'], '', $data['verifikasi']);
+                $verifikasiFloat = (float) $verifikasi;
+                $verifikasiFormatted = number_format($verifikasiFloat, 2, '.', '');
+                $catatan_pemeriksa = isset($data['catatan_pemeriksa']) ? $data['catatan_pemeriksa'] : '';
+                $id_validator = Auth::user()->id;
+                $tanggal_verifikasi = now();
+
+                $biaya_atribusi_detail = BiayaAtribusiDetail::find($id_biaya_atribusi_detail);
+
+                if (!$biaya_atribusi_detail) {
+                    return response()->json(['status' => 'ERROR', 'message' => 'Detail biaya atribusi tidak ditemukan'], Response::HTTP_NOT_FOUND);
+                }
+
+                $biaya_atribusi_detail->update([
+                    'verifikasi' => $verifikasiFormatted,
+                    'catatan_pemeriksa' => $catatan_pemeriksa,
+                    'id_validator' => $id_validator,
+                    'tgl_verifikasi' => $tanggal_verifikasi,
+                ]);
+
+                $updatedData[] = $biaya_atribusi_detail; // Menambahkan data yang diperbarui ke dalam array
             }
 
+            return response()->json(['status' => 'SUCCESS', 'data' => $updatedData]);
         } catch (\Exception $e) {
             return response()->json(['status' => 'ERROR', 'message' => $e->getMessage()], Response::HTTP_INTERNAL_SERVER_ERROR);
         }

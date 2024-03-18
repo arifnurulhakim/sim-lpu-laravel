@@ -12,6 +12,7 @@ use App\Http\Controllers\KategoriBiayaController;
 use App\Http\Controllers\KecamatanController;
 use App\Http\Controllers\KelurahanController;
 use App\Http\Controllers\KprkController;
+use App\Http\Controllers\NppController;
 use App\Http\Controllers\PenyelenggaraController;
 use App\Http\Controllers\ProvinsiController;
 use App\Http\Controllers\PusherController;
@@ -162,6 +163,14 @@ Route::middleware('auth:api')->group(function () {
         Route::get('produksi-detail', [VerifikasiProduksiController::class, 'getDetail'])->name('produksi-detail');
         Route::post('produksi-verifikasi', [VerifikasiProduksiController::class, 'verifikasi'])->name('produksi-verifikasi');
         Route::post('produksi-not-simpling', [VerifikasiProduksiController::class, 'notSimpling'])->name('produksi-not-simpling');
+
+        Route::get('npp-tahun', [NppController::class, 'getPerTahun'])->name('npp-tahun');
+        Route::get('npp-regional', [NppController::class, 'getPerRegional'])->name('npp-regional');
+        Route::get('npp-kcu', [NppController::class, 'getPerKCU'])->name('npp-kcu');
+        Route::get('npp-kpc', [NppController::class, 'getPerKPC'])->name('npp-kpc');
+        Route::get('npp-detail', [NppController::class, 'getDetail'])->name('npp-detail');
+        Route::post('npp-verifikasi', [NppController::class, 'verifikasi'])->name('npp-verifikasi');
+        Route::post('npp-not-simpling', [NppController::class, 'notSimpling'])->name('npp-not-simpling');
 
     });
 });
