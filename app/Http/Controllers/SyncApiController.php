@@ -2,14 +2,17 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\BiayaArtibusi;
-use App\Models\BiayaArtibusiDetail;
+use App\Models\BiayaAtribusi;
+use App\Models\BiayaAtribusiDetail;
 use App\Models\JenisBisnis;
 use App\Models\KategoriBiaya;
+use App\Models\Kpc;
 use App\Models\Kprk;
 use App\Models\PetugasKPC;
 use App\Models\Regional;
 use App\Models\RekeningBiaya;
+use App\Models\VerifikasiBiayaRutin;
+use App\Models\VerifikasiBiayaRutinDetail;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Symfony\Component\HttpFoundation\Response;
@@ -468,7 +471,7 @@ class SyncApiController extends Controller
             $response = $apiController->makeRequest($request);
 
             // Mengambil data provinsi dari respons
-            $dataKCP = $response['data'];
+            $dataKCP = $response['data'] ?? [];
             if (!$dataKCP) {
                 return response()->json(['message' => 'Terjadi kesalahan: sync error'], 500);
             }
@@ -507,7 +510,7 @@ class SyncApiController extends Controller
             // Mendefinisikan endpoint untuk sinkronisasi provinsi
             $endpoint = '';
             $id_regional = $request->id_regional;
-            $id_kprk = $request->id_kprk;
+            $id_kprk = $request->id_kprk ?? '';
             $kategori_biaya = $request->kategori_biaya;
             $bulan = $request->bulan;
             $tahun = $request->tahun;
@@ -519,56 +522,107 @@ class SyncApiController extends Controller
             } else {
                 $endpoint = 'biaya_sopir_tersier';
             }
-
-            // Membuat instance dari ApiController
-            $apiController = new ApiController();
-            $url_request = $endpoint . '?bulan=' . $bulan . '&id_kprk=' . $id_kprk . '&tahun=' . $tahun;
-            // Memanggil makeRequest dari ApiController untuk sinkronisasi dengan endpoint provinsi
-            $response = $apiController->makeRequest($request);
-
-            // Mengambil data provinsi dari respons
-            $dataBiayaAtribusi = $response['data'];
-            if (!$dataBiayaAtribusi) {
-                return response()->json(['message' => 'Terjadi kesalahan: sync error'], 500);
+            $list_kprk = '';
+            if (!$id_kprk) {
+                $list_kprk = Kprk::where('id_regional', $id_regional)->get();
+            } else {
+                $list_kprk = Kprk::where('id', $id_kprk)->get();
             }
+            // dd($list_kprk);
+            // Membuat instance dari ApiController
+            foreach ($list_kprk as $kprk) {
+                $apiController = new ApiController();
 
-            // Memulai transaksi database untuk meningkatkan kinerja
-            DB::beginTransaction();
+                $url_request = $endpoint . '?bulan=' . $bulan . '&id_kprk=' . $kprk->id . '&tahun=' . $tahun;
+                // dd($url_request);
+                $request->merge(['end_point' => $url_request]);
+                // Memanggil makeRequest dari ApiController untuk sinkronisasi dengan endpoint provinsi
+                $response = $apiController->makeRequest($request);
 
-            foreach ($dataBiayaAtribusi as $data) {
-                // Mencari provinsi berdasarkan ID
-                $biayaAtribusi = BiayaArtibusi::find($data['id']);
-                $biayaAtribusiDetail = BiayaArtibusiDetail::where('id_biaya_atribusi', $biayaAtribusi->id)->where('id_rekening_biaya', $data['koderekening'])->get();
-
-                if ($petugasKPC) {
-                    $petugasKPC->update([
-                        'nama_petugas' => $data['nama_petugas'],
-                        'nippos' => $data['nippos'],
-                        'pangkat' => $data['pangkat'],
-                        'masa_kerja' => $data['masa_kerja'],
-                        'jabatan' => $data['jabatan'],
-                        // Perbarui atribut lain yang diperlukan
-                    ]);
+                // Mengambil data provinsi dari respons
+                $dataBiayaAtribusi = $response['data'] ?? [];
+                if (!$dataBiayaAtribusi) {
+                    continue;
                 } else {
-                    // Jika provinsi tidak ditemukan, tambahkan data baru
-                    PetugasKPC::create([
-                        'nama_petugas' => $data['nama_petugas'],
-                        'nippos' => $data['nippos'],
-                        'pangkat' => $data['pangkat'],
-                        'masa_kerja' => $data['masa_kerja'],
-                        'jabatan' => $data['jabatan'],
-                        // Tambahkan atribut lain yang diperlukan
-                    ]);
+                    DB::beginTransaction();
+                    foreach ($dataBiayaAtribusi as $data) {
+                        // dd($data['id']);
+                        // Mencari provinsi berdasarkan ID
+                        $biayaAtribusi = BiayaAtribusi::where('tahun_anggaran', $data['tahun_anggaran'])
+                            ->where('triwulan', $data['triwulan'])
+                            ->where('id_kprk', $kprk->id)->first();
+                        // dd($biayaAtribusi);
+                        $biayaAtribusiDetail = '';
+                        if ($biayaAtribusi) {
+                            $bulan = ltrim($data['bulan'], '0');
+
+                            $biayaAtribusiDetail = BiayaAtribusiDetail::where('id_rekening_biaya', $data['koderekening'])
+                                ->where('bulan', $bulan)
+                                ->where('id_biaya_atribusi', $biayaAtribusi->id)
+                                ->first();
+
+                            // dd($biayaAtribusiDetail);
+                            if ($biayaAtribusiDetail) {
+                                $biayaAtribusiDetail->update([
+                                    'pelaporan' => $data['nominal'],
+                                    'keterangan' => $data['keterangan'],
+                                    'lampiran' => $data['lampiran'],
+                                ]);
+                                $biayaAtribusiDetail = BiayaAtribusiDetail::select(DB::raw('SUM(pelaporan) as total_pelaporan'))
+                                    ->where('id_biaya_atribusi', $biayaAtribusi->id)
+                                    ->first();
+                                $biayaAtribusi->update([
+                                    'total_biaya' => $biayaAtribusiDetail->total_pelaporan,
+                                    'id_status' => 7,
+                                    'id_status_kprk' => 7,
+                                ]);
+
+                            } else {
+                                // Jika provinsi tidak ditemukan, tambahkan data baru
+                                BiayaAtribusiDetail::create([
+                                    'id' => $data['id'],
+                                    'id_biaya_atribusi' => $biayaAtribusi->id,
+                                    'bulan' => $data['bulan'],
+                                    'id_rekening_biaya' => $data['koderekening'],
+                                    'pelaporan' => $data['nominal'],
+                                    'keterangan' => $data['keterangan'],
+                                    'lampiran' => $data['lampiran'],
+                                ]);
+                            }
+
+                        } else {
+                            $biayaAtribusiNew = BiayaAtribusi::create([
+                                'id' => $data['id_kprk'] . $data['tahun_anggaran'] . $data['triwulan'],
+                                'id_regional' => $kprk->id_regional,
+                                'id_kprk' => $data['id_kprk'],
+                                'triwulan' => $data['triwulan'],
+                                'tahun_anggaran' => $data['tahun_anggaran'],
+                                'total_biaya' => $data['nominal'],
+                                'tgl_singkronisasi' => now(),
+                                'id_status' => 7,
+                                'id_status_kprk' => 7,
+                            ]);
+
+                            BiayaAtribusiDetail::create([
+                                'id' => $data['id'],
+                                'id_biaya_atribusi' => $biayaAtribusiNew->id,
+                                'bulan' => $data['bulan'],
+                                'id_rekening_biaya' => $data['koderekening'],
+                                'pelaporan' => $data['nominal'], // Ini mungkin perlu disesuaikan
+                                'keterangan' => $data['keterangan'],
+                                'lampiran' => $data['lampiran'],
+                            ]);
+
+                        }
+
+                    }
+                    DB::commit();
+
                 }
             }
-
-            // Commit transaksi setelah selesai
-            DB::commit();
-
-            // Setelah sinkronisasi selesai, kembalikan respons JSON sukses
             return response()->json([
                 'status' => 'SUCCESS',
-                'message' => 'Sinkronisasi petugas KPC berhasil'], 200);
+                'message' => 'Sinkronisasi biaya atribusi berhasil'], 200);
         } catch (\Exception $e) {
             // Rollback transaksi jika terjadi kesalahan
             DB::rollBack();
@@ -577,65 +631,129 @@ class SyncApiController extends Controller
             return response()->json(['message' => 'Terjadi kesalahan: ' . $e->getMessage()], 500);
         }
     }
-    public function syncProduksi(Request $request)
+    public function syncBiaya(Request $request)
     {
         try {
             // Mendefinisikan endpoint untuk sinkronisasi provinsi
-            $endpoint = 'produksi';
-            $tipe_bisnis = $request->kd_bisnis;
-            $no_kcp = $request->nopend;
+            $endpoint = 'biaya';
+            $id_regional = $request->id_regional;
+            $id_kprk = $request->id_kprk ?? '';
+            $id_kpc = $request->id_kpc ?? '';
             $triwulan = $request->triwulan;
             $tahun = $request->tahun;
 
-            // Membuat instance dari ApiController
-            $apiController = new ApiController();
-            $url_request = $endpoint . '?nopend=' . $no_kcp . '&kd_bisnis=' . $tipe_bisnis . '&tahun=' . $tahun . '&triwulan=' . $triwulan;
-            // Memanggil makeRequest dari ApiController untuk sinkronisasi dengan endpoint provinsi
-            $response = $apiController->makeRequest($request);
-
-            // Mengambil data provinsi dari respons
-            $dataBiayaAtribusi = $response['data'];
-            if (!$dataBiayaAtribusi) {
-                return response()->json(['message' => 'Terjadi kesalahan: sync error'], 500);
+            $list = '';
+            if ($id_regional) {
+                $list = Kpc::where('id_regional', $id_regional)->get();
             }
+            if ($id_kprk) {
+                $list = Kpc::where('id_kprk', $id_kprk)->get();
+            }
+            if ($id_kpc) {
+                $list = Kpc::where('id', $id_kpc)->get();
+            }
+            // dd($list);
+            foreach ($list as $ls) {
+                $kategori_biaya = KategoriBiaya::get();
 
-            // Memulai transaksi database untuk meningkatkan kinerja
-            DB::beginTransaction();
+                foreach ($kategori_biaya as $kb) {
+                    // dd($kategori_biaya);
+                    $apiController = new ApiController();
+                    $url_request = $endpoint . '?kategoribiaya=' . $kb->id . '&nopend=' . $ls->id . '&tahun=' . $tahun . '&triwulan=' . $triwulan;
+                    $request->merge(['end_point' => $url_request]);
+                    $response = $apiController->makeRequest($request);
+                    // dd($response);
+                    // Mengambil data provinsi dari respons
+                    $dataBiayaRutin = $response['data'] ?? [];
+                    if (!$dataBiayaRutin) {
+                        continue;
+                    } else {
+                        DB::beginTransaction();
+                        foreach ($dataBiayaRutin as $data) {
+                            // dd($data['id']);
+                            // Mencari provinsi berdasarkan ID
+                            $biayaRutin = VerifikasiBiayaRutin::where('tahun', $data['tahun_anggaran'])
+                                ->where('triwulan', $data['triwulan'])
+                                ->where('id_kpc', $data['id_kpc'])->first();
+                            // dd($biayaRutin);
+                            $biayaRutinDetail = '';
+                            if ($biayaRutin) {
+                                $bulan = $biayaRutin->bulan;
 
-            foreach ($dataBiayaAtribusi as $data) {
-                // Mencari provinsi berdasarkan ID
-                $biayaAtribusi = BiayaArtibusi::find($data['id']);
-                $biayaAtribusiDetail = BiayaArtibusiDetail::where('id_biaya_atribusi', $biayaAtribusi->id)->where('id_rekening_biaya', $data['koderekening'])->get();
+                                $biayaRutinDetail = VerifikasiBiayaRutinDetail::
+                                    where('id_rekening_biaya', $data['koderekening'])
+                                    ->where('bulan', $bulan)
+                                    ->where('kategori_biaya', $kb->nama)
+                                    ->where('id_verifikasi_biaya_rutin', $biayaRutin->id)
+                                // where('id', $data['id'])
+                                    ->first();
 
-                if ($petugasKPC) {
-                    $petugasKPC->update([
-                        'nama_petugas' => $data['nama_petugas'],
-                        'nippos' => $data['nippos'],
-                        'pangkat' => $data['pangkat'],
-                        'masa_kerja' => $data['masa_kerja'],
-                        'jabatan' => $data['jabatan'],
-                        // Perbarui atribut lain yang diperlukan
-                    ]);
-                } else {
-                    // Jika provinsi tidak ditemukan, tambahkan data baru
-                    PetugasKPC::create([
-                        'nama_petugas' => $data['nama_petugas'],
-                        'nippos' => $data['nippos'],
-                        'pangkat' => $data['pangkat'],
-                        'masa_kerja' => $data['masa_kerja'],
-                        'jabatan' => $data['jabatan'],
-                        // Tambahkan atribut lain yang diperlukan
-                    ]);
+                                // dd($biayaAtribusiDetail);
+                                if ($biayaRutinDetail) {
+                                    $biayaRutinDetail->update([
+                                        'pelaporan' => $data['nominal'],
+                                        'keterangan' => $data['keterangan'],
+                                        'lampiran' => $data['lampiran'],
+                                    ]);
+                                    $biayaRutinDetail = VerifikasiBiayaRutinDetail::select(DB::raw('SUM(pelaporan) as total_pelaporan'))
+                                        ->where('id_verifikasi_biaya_rutin', $biayaRutin->id)
+                                        ->first();
+                                    $biayaRutin->update([
+                                        'total_biaya' => $biayaRutinDetail->total_pelaporan,
+                                        'id_status' => 7,
+                                        'id_status_kprk' => 7,
+                                    ]);
+
+                                } else {
+                                    // Jika provinsi tidak ditemukan, tambahkan data baru
+                                    VerifikasiBiayaRutinDetail::create([
+                                        // 'id' => $data['id'],
+                                        'id_verifikasi_biaya_rutin' => $biayaRutin->id,
+                                        'bulan' => $data['bulan'],
+                                        'id_rekening_biaya' => $data['koderekening'],
+                                        'pelaporan' => $data['nominal'],
+                                        'kategori_biaya' => $kb->nama,
+                                        'keterangan' => $data['keterangan'],
+                                        'lampiran' => $data['lampiran'],
+                                    ]);
+                                }
+
+                            } else {
+                                $biayaRutinNew = VerifikasiBiayaRutin::create([
+                                    'id' => $data['id_kpc'] . $data['tahun_anggaran'] . $data['triwulan'],
+                                    'id_regional' => $ls->id_regional,
+                                    'id_kprk' => $data['id_kprk'],
+                                    'id_kpc' => $data['id_kpc'],
+                                    'tahun' => $data['tahun_anggaran'],
+                                    'triwulan' => $data['triwulan'],
+                                    'total_biaya' => $data['nominal'],
+                                    'tgl_singkronisasi' => now(),
+                                    'id_status' => 7,
+                                    'id_status_kprk' => 7,
+                                    'id_status_kpc' => 7,
+                                    'bulan' => $data['bulan'],
+                                ]);
+
+                                // Jika provinsi tidak ditemukan, tambahkan data baru
+                                VerifikasiBiayaRutinDetail::create([
+                                    // 'id' => $data['id'],
+                                    'id_verifikasi_biaya_rutin' => $data['id_kpc'] . $data['tahun_anggaran'] . $data['triwulan'],
+                                    'bulan' => $data['bulan'],
+                                    'id_rekening_biaya' => $data['koderekening'],
+                                    'pelaporan' => $data['nominal'],
+                                    'kategori_biaya' => $kb->nama,
+                                    'keterangan' => $data['keterangan'],
+                                    'lampiran' => $data['lampiran'],
+                                ]);
+                            }
+                        }
+                        DB::commit();
+                    }
                 }
             }
-
-            // Commit transaksi setelah selesai
-            DB::commit();
-
-            // Setelah sinkronisasi selesai, kembalikan respons JSON sukses
             return response()->json([
                 'status' => 'SUCCESS',
-                'message' => 'Sinkronisasi petugas KPC berhasil'], 200);
+                'message' => 'Sinkronisasi biaya berhasil'], 200);
         } catch (\Exception $e) {
             // Rollback transaksi jika terjadi kesalahan
             DB::rollBack();
@@ -644,4 +762,134 @@ class SyncApiController extends Controller
             return response()->json(['message' => 'Terjadi kesalahan: ' . $e->getMessage()], 500);
         }
     }
+    public function syncBiayaPrognosa(Request $request)
+    {
+        try {
+            // Mendefinisikan endpoint untuk sinkronisasi provinsi
+            $endpoint = 'biaya_prognosa';
+            $id_regional = $request->id_regional;
+            $id_kprk = $request->id_kprk ?? '';
+            $id_kpc = $request->id_kpc ?? '';
+            $triwulan = $request->triwulan;
+            $tahun = $request->tahun;
+
+            $list = '';
+            if ($id_regional) {
+                $list = Kpc::where('id_regional', $id_regional)->get();
+            }
+            if ($id_kprk) {
+                $list = Kpc::where('id_kprk', $id_kprk)->get();
+            }
+            if ($id_kpc) {
+                $list = Kpc::where('id', $id_kpc)->get();
+            }
+            // dd($list);
+            foreach ($list as $ls) {
+                $kategori_biaya = KategoriBiaya::get();
+
+                foreach ($kategori_biaya as $kb) {
+                    // dd($kategori_biaya);
+                    $apiController = new ApiController();
+                    $url_request = $endpoint . '?kategoribiaya=' . $kb->id . '&nopend=' . $ls->id . '&tahun=' . $tahun . '&triwulan=' . $triwulan;
+                    $request->merge(['end_point' => $url_request]);
+                    $response = $apiController->makeRequest($request);
+                    // dd($response);
+                    // Mengambil data provinsi dari respons
+                    $dataBiayaRutin = $response['data'] ?? [];
+                    if (!$dataBiayaRutin) {
+                        continue;
+                    } else {
+                        DB::beginTransaction();
+                        foreach ($dataBiayaRutin as $data) {
+                            // dd($data['id']);
+                            // Mencari provinsi berdasarkan ID
+                            $biayaRutin = VerifikasiBiayaRutin::where('tahun', $data['tahun_anggaran'])
+                                ->where('triwulan', $data['triwulan'])
+                                ->where('id_kpc', $data['id_kpc'])->first();
+                            // dd($biayaRutin);
+                            $biayaRutinDetail = '';
+                            if ($biayaRutin) {
+                                $bulan = $biayaRutin->bulan;
+
+                                $biayaRutinDetail = VerifikasiBiayaRutinDetail::
+                                    where('id_rekening_biaya', $data['koderekening'])
+                                    ->where('bulan', $bulan)
+                                    ->where('kategori_biaya', $kb->nama)
+                                    ->where('id_verifikasi_biaya_rutin', $biayaRutin->id)
+                                // where('id', $data['id'])
+                                    ->first();
+
+                                // dd($biayaAtribusiDetail);
+                                if ($biayaRutinDetail) {
+                                    $biayaRutinDetail->update([
+                                        'pelaporan_prognosa' => $data['nominal'],
+                                        'keterangan_prognosa' => $data['keterangan'],
+                                        'lampiran' => $data['lampiran'],
+                                    ]);
+                                    $biayaRutinDetail = VerifikasiBiayaRutinDetail::select(DB::raw('SUM(pelaporan_prognosa) as total_pelaporan'))
+                                        ->where('id_verifikasi_biaya_rutin', $biayaRutin->id)
+                                        ->first();
+                                    $biayaRutin->update([
+                                        'total_biaya_prognosa' => $biayaRutinDetail->total_pelaporan,
+                                    ]);
+
+                                } else {
+                                    // Jika provinsi tidak ditemukan, tambahkan data baru
+                                    VerifikasiBiayaRutinDetail::create([
+                                        // 'id' => $data['id'],
+                                        'id_verifikasi_biaya_rutin' => $biayaRutin->id,
+                                        'bulan' => $data['bulan'],
+                                        'id_rekening_biaya' => $data['koderekening'],
+                                        'pelaporan_prognosa' => $data['nominal'],
+                                        'kategori_biaya' => $kb->nama,
+                                        'keterangan_prognosa' => $data['keterangan'],
+                                        'lampiran' => $data['lampiran'],
+                                    ]);
+                                }
+
+                            } else {
+                                $biayaRutinNew = VerifikasiBiayaRutin::create([
+                                    'id' => $data['id_kpc'] . $data['tahun_anggaran'] . $data['triwulan'],
+                                    'id_regional' => $ls->id_regional,
+                                    'id_kprk' => $data['id_kprk'],
+                                    'id_kpc' => $data['id_kpc'],
+                                    'tahun' => $data['tahun_anggaran'],
+                                    'triwulan' => $data['triwulan'],
+                                    'total_biaya_prognosa' => $data['nominal'],
+                                    'tgl_singkronisasi' => now(),
+                                    'id_status' => 7,
+                                    'id_status_kprk' => 7,
+                                    'id_status_kpc' => 7,
+                                    'bulan' => $data['bulan'],
+                                ]);
+
+                                // Jika provinsi tidak ditemukan, tambahkan data baru
+                                VerifikasiBiayaRutinDetail::create([
+                                    // 'id' => $data['id'],
+                                    'id_verifikasi_biaya_rutin' => $data['id_kpc'] . $data['tahun_anggaran'] . $data['triwulan'],
+                                    'bulan' => $data['bulan'],
+                                    'id_rekening_biaya' => $data['koderekening'],
+                                    'pelaporan_prognosa' => $data['nominal'],
+                                    'kategori_biaya' => $kb->nama,
+                                    'keterangan_prognosa' => $data['keterangan'],
+                                    'lampiran' => $data['lampiran'],
+                                ]);
+                            }
+                        }
+                        DB::commit();
+                    }
+                }
+            }
+            return response()->json([
+                'status' => 'SUCCESS',
+                'message' => 'Sinkronisasi biaya berhasil'], 200);
+        } catch (\Exception $e) {
+            // Rollback transaksi jika terjadi kesalahan
+            DB::rollBack();
+
+            // Tangani kesalahan yang terjadi selama sinkronisasi
+            return response()->json(['message' => 'Terjadi kesalahan: ' . $e->getMessage()], 500);
+        }
+    }
+    
 }

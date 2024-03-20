@@ -1,11 +1,13 @@
 <?php
 
-namespace App;
+namespace App\Models;
 
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
 class PetugasKPC extends Model
 {
+    use HasFactory;
     protected $table = 'kpc_petugas'; // Sesuaikan dengan nama tabel Anda
     public $timestamps = false;
     protected $fillable = [

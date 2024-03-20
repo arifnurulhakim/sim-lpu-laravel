@@ -575,7 +575,7 @@ class VerifikasiBiayaRutinController extends Controller
 
             $id_verifikasi_biaya_rutin = request()->get('id_verifikasi_biaya_rutin', '');
             $kode_rekening = request()->get('kode_rekening', '');
-            $bulan = request()->get('bulan', '');
+            $bulan = str_pad(request()->get('bulan', ''), 2, '0', STR_PAD_LEFT);
             $id_kcu = request()->get('id_kcu', '');
             $id_kpc = request()->get('id_kpc', '');
             $validator = Validator::make($request->all(), [
@@ -603,7 +603,7 @@ class VerifikasiBiayaRutinController extends Controller
                 'rekening_biaya.kode_rekening',
                 'rekening_biaya.nama as nama_rekening',
                 'verifikasi_biaya_rutin.tahun',
-                DB::raw("CONCAT('" . $bulanIndonesia[$request->bulan - 1] . "') AS periode"),
+                DB::raw("CONCAT('" . $bulanIndonesia[$bulan - 1] . "') AS periode"),
                 'verifikasi_biaya_rutin_detail.keterangan',
                 'verifikasi_biaya_rutin_detail.lampiran',
                 'verifikasi_biaya_rutin_detail.pelaporan',
@@ -613,7 +613,7 @@ class VerifikasiBiayaRutinController extends Controller
 
                 ->where('verifikasi_biaya_rutin_detail.id_verifikasi_biaya_rutin', $request->id_verifikasi_biaya_rutin)
                 ->where('verifikasi_biaya_rutin_detail.id_rekening_biaya', $request->kode_rekening)
-                ->where('verifikasi_biaya_rutin_detail.bulan', $request->bulan)
+                ->where('verifikasi_biaya_rutin_detail.bulan', $bulan)
                 ->where('verifikasi_biaya_rutin.id_kprk', $request->id_kcu)
                 ->where('verifikasi_biaya_rutin.id_kpc', $request->id_kpc)
                 ->join('verifikasi_biaya_rutin', 'verifikasi_biaya_rutin_detail.id_verifikasi_biaya_rutin', '=', 'verifikasi_biaya_rutin.id')

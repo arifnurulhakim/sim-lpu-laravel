@@ -94,14 +94,14 @@ class KprkController extends Controller
         try {
             // Validasi input
             $validator = Validator::make($request->all(), [
-                'id_regional' => 'required',
+                'id_regional' => 'required|numeric|exists:regional,id',
                 'kode' => 'required',
                 'nama' => 'required',
                 'id_file' => 'required',
-                'id_provinsi' => 'required',
-                'id_kabupaten_kota' => 'required',
-                'id_kecamatan' => 'required',
-                'id_kelurahan' => 'required',
+                'id_provinsi' => 'required|numeric|exists:provinsi,id',
+                'id_kabupaten_kota' => 'required|numeric|exists:kabupaten_kota,id',
+                'id_kecamatan' => 'required|numeric|exists:kecamatan,id',
+                'id_kelurahan' => 'required|numeric|exists:kelurahan,id',
                 'longitude' => 'required',
                 'latitude' => 'required',
                 'tgl_sinkronisasi' => 'required',
@@ -124,6 +124,24 @@ class KprkController extends Controller
         try {
             // Cari data Kprk berdasarkan ID
             $kprk = Kprk::where('id', $id)->first();
+            return response()->json(['status' => 'SUCCESS', 'data' => $kprk]);
+        } catch (\Exception $e) {
+            return response()->json(['status' => 'ERROR', 'message' => $e->getMessage()], Response::HTTP_NOT_FOUND);
+        }
+    }
+
+    public function getByregional(Request $request)
+    {
+        try {
+            $validator = Validator::make($request->all(), [
+                'id_regional' => 'required|numeric|exists:regional,id',
+            ]);
+
+            if ($validator->fails()) {
+                return response()->json(['status' => 'ERROR', 'message' => $validator->errors()], Response::HTTP_UNPROCESSABLE_ENTITY);
+            }
+            // Cari data Kprk berdasarkan ID
+            $kprk = Kprk::where('id_regional', $request->id_regional)->get();
             return response()->json(['status' => 'SUCCESS', 'data' => $kprk]);
         } catch (\Exception $e) {
             return response()->json(['status' => 'ERROR', 'message' => $e->getMessage()], Response::HTTP_NOT_FOUND);

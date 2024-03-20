@@ -11,9 +11,11 @@ use App\Http\Controllers\KabupatenKotaController;
 use App\Http\Controllers\KategoriBiayaController;
 use App\Http\Controllers\KecamatanController;
 use App\Http\Controllers\KelurahanController;
+use App\Http\Controllers\KpcController;
 use App\Http\Controllers\KprkController;
 use App\Http\Controllers\NppController;
 use App\Http\Controllers\PenyelenggaraController;
+use App\Http\Controllers\PetugasKpcController;
 use App\Http\Controllers\ProvinsiController;
 use App\Http\Controllers\PusherController;
 use App\Http\Controllers\RegionalController;
@@ -81,6 +83,8 @@ Route::get('/syncPetugasKCP', [SyncApiController::class, 'syncPetugasKCP']);
 Route::get('/syncKCU', [SyncApiController::class, 'syncKCU']);
 Route::get('/syncKPC', [SyncApiController::class, 'syncKPC']);
 Route::get('/syncBiayaAtribusi', [SyncApiController::class, 'syncBiayaAtribusi']);
+Route::get('/syncBiaya', [SyncApiController::class, 'syncBiaya']);
+Route::get('/syncBiaya-prognosa', [SyncApiController::class, 'syncBiayaPrognosa']);
 Route::get('/syncProduksi', [SyncApiController::class, 'syncProduksi']);
 
 Route::controller(AuthController::class)->group(function () {
@@ -133,6 +137,8 @@ Route::middleware('auth:api')->group(function () {
         Route::apiResource('jenis-bisnis', JenisBisnisController::class);
         Route::apiResource('jenis-kantor', JenisKantorController::class);
         Route::apiResource('kprk', KprkController::class);
+        Route::apiResource('kpc', KpcController::class);
+        Route::apiResource('petugas-kpc', PetugasKpcController::class);
         Route::apiResource('penyelenggara', PenyelenggaraController::class);
         Route::apiResource('regional', RegionalController::class);
         Route::apiResource('rekening-biaya', RekeningBiayaController::class);
@@ -141,6 +147,10 @@ Route::middleware('auth:api')->group(function () {
 
         Route::get('status', [UserController::class, 'status'])->name('status');
         Route::get('grup', [UserController::class, 'grup'])->name('grup');
+        Route::get('kprk-regional', [KprkController::class, 'getByregional'])->name('kprk-regional');
+        Route::get('kpc-regional', [KpcController::class, 'getByregional'])->name('kpc-regional');
+        Route::get('kpc-kprk', [KpcController::class, 'getBykprk'])->name('kprk-kprk');
+        Route::get('petugas-per-kpc', [PetugasKpcController::class, 'getBykpc'])->name('petugas-per-kpc');
 
         Route::get('atribusi-tahun', [BiayaAtribusiController::class, 'getPerTahun'])->name('atribusi-tahun');
         Route::get('atribusi-regional', [BiayaAtribusiController::class, 'getPerRegional'])->name('atribusi-regional');
